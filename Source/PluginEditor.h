@@ -27,6 +27,21 @@ private:
     SurroundDelayAudioProcessor& audioProcessor;
 
     juce::Label titleLabel;
+    
+    // Parameter controls
+    juce::Slider delayTimeSlider;
+    juce::Label delayTimeLabel;
+    
+    juce::Slider feedbackSlider;
+    juce::Label feedbackLabel;
+    
+    juce::Slider mixSlider;
+    juce::Label mixLabel;
+    
+    // Slider attachments for parameter binding
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> delayTimeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> feedbackAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SurroundDelayAudioProcessorEditor)
 };

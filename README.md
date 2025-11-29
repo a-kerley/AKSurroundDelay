@@ -122,7 +122,7 @@ The CMakeLists.txt has `COPY_PLUGIN_AFTER_BUILD TRUE`, which automatically copie
 
 3. **Add the Plugin**
    - Click on an insert slot in the channel strip
-   - Navigate to: Audio Units → YourCompany → Surround Delay
+   - Navigate to: Audio Units → ClipPoint → Surround Delay
    - The plugin should appear with a dark gradient background and "Surround Delay" title
 
 4. **Verify Audio Pass-Through**
@@ -202,7 +202,7 @@ Set the JUCE_DIR either:
 
 ### Changing Plugin Details
 Edit `CMakeLists.txt`:
-- `COMPANY_NAME`: Your company/developer name
+- `COMPANY_NAME`: Your company/developer name (currently "ClipPoint")
 - `PLUGIN_MANUFACTURER_CODE`: 4-character manufacturer ID
 - `PLUGIN_CODE`: 4-character plugin ID
 - `PRODUCT_NAME`: Display name in DAW

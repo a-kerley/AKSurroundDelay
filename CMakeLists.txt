@@ -6,6 +6,14 @@ project(SurroundDelay VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Enable ccache if available for faster rebuilds
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    message(STATUS "ccache found and enabled")
+endif()
+
 # Point this to your JUCE installation directory
 # Using the local JUCE clone in this workspace
 if(NOT DEFINED JUCE_DIR)
@@ -17,7 +25,7 @@ add_subdirectory(${JUCE_DIR} JUCE)
 
 # Plugin configuration
 juce_add_plugin(SurroundDelay
-    COMPANY_NAME "YourCompany"
+    COMPANY_NAME "ClipPoint"
     PLUGIN_MANUFACTURER_CODE Ycom
     PLUGIN_CODE Srdl
     FORMATS AU

@@ -46,8 +46,29 @@ public:
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    
+    //==============================================================================
+    // Public access to parameters for editor
+    juce::AudioProcessorValueTreeState& getParameters() { return parameters; }
 
 private:
     //==============================================================================
+    // Parameter tree state for automation and preset management
+    juce::AudioProcessorValueTreeState parameters;
+    
+    // Parameter IDs
+    static constexpr const char* PARAM_DELAY_TIME = "delayTime";
+    static constexpr const char* PARAM_FEEDBACK = "feedback";
+    static constexpr const char* PARAM_MIX = "mix";
+    
+    // Delay buffers (one per channel, up to 8 channels for 7.1)
+    juce::AudioBuffer<float> delayBuffer;
+    int delayBufferLength = 0;
+    int writePosition = 0;
+    
+    // Helper functions
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    float getDelayTimeSamples() const;
+    
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SurroundDelayAudioProcessor)
 };
