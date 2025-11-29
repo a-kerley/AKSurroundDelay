@@ -7,7 +7,7 @@
 - **Build System**: CMake 3.15+
 - **Language**: C++17
 - **IDE**: VS Code with CMake Tools extension
-- **Current Status**: Stereo pass-through plugin (surround support to be added)
+- **Current Status**: Delay plugin with multi-channel support (mono, stereo, 5.1, 7.1, multi-mono)
 
 ## Plugin Identifiers
 - **Manufacturer Code**: `Ycom` (ClipPoint)
@@ -64,15 +64,22 @@ auval -v aufx Srdl Ycom
 auval -a
 ```
 
-### Reset AU Cache (only needed first time or after code signing changes)
+### Reset AU Cache (when plugin metadata/channel configs change)
 ```bash
+# 1. Reset system AU cache
 killall -9 AudioComponentRegistrar
+
+# 2. Force Logic Pro to rescan (REQUIRED - cache deletion alone doesn't work)
+# Open Logic Pro → Preferences → Plug-in Manager → Select "Surround Delay" → Reset & Rescan Selection
 ```
+
+**IMPORTANT**: Logic Pro maintains its own internal plugin cache that is **separate** from the system AU cache. Simply deleting cache files or killing AudioComponentRegistrar will NOT cause Logic to rescan. You MUST manually trigger a rescan from Logic's Plugin Manager.
 
 ### Testing in Logic Pro
 1. Open Logic Pro
 2. Navigate: **Audio Units → ClipPoint → Surround Delay**
 3. Verify audio pass-through and GUI display
+4. Test on multiple track formats (mono, stereo, 5.1, 7.1) to verify channel flexibility
 
 ## Code Conventions
 
@@ -93,9 +100,10 @@ Modern JUCE doesn't use `JuceHeader.h`. Use specific module includes:
 - Editor: `SurroundDelayAudioProcessorEditor`
 
 ### Current Channel Configuration
-- **Input**: Stereo (2 channels)
-- **Output**: Stereo (2 channels)
-- See `isBusesLayoutSupported()` for validation logic
+- **Supported Formats**: Mono, Stereo, Multi-mono (up to 8 channels), 5.1, 7.1
+- **Channel Capabilities**: [1,1] [1,2] [1,3] [1,4] [1,5] [1,6] [1,7] [1,8] [2,2] [2,6] [2,8] [3,3] [4,4] [5,5] [6,6] [7,7] [8,8]
+- **Upmixing**: Mono → any format, Stereo → 5.1/7.1
+- See `isBusesLayoutSupported()` for dynamic channel validation logic
 
 ## Development Workflow
 

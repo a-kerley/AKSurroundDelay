@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(SurroundDelay VERSION 1.0.0)
+project(TapMatrix VERSION 1.0.0)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
@@ -24,12 +24,12 @@ endif()
 add_subdirectory(${JUCE_DIR} JUCE)
 
 # Plugin configuration
-juce_add_plugin(SurroundDelay
+juce_add_plugin(TapMatrix
     COMPANY_NAME "ClipPoint"
     PLUGIN_MANUFACTURER_CODE Ycom
-    PLUGIN_CODE Srdl
+    PLUGIN_CODE TpMx
     FORMATS AU
-    PRODUCT_NAME "Surround Delay"
+    PRODUCT_NAME "TapMatrix"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -40,17 +40,18 @@ juce_add_plugin(SurroundDelay
 )
 
 # Source files
-target_sources(SurroundDelay
+target_sources(TapMatrix
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
 )
 
 # Link JUCE modules
-target_link_libraries(SurroundDelay
+target_link_libraries(TapMatrix
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_plugin_client
+        juce::juce_dsp
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -64,16 +65,16 @@ add_custom_target(install_instructions ALL
     COMMAND ${CMAKE_COMMAND} -E echo "BUILD COMPLETE"
     COMMAND ${CMAKE_COMMAND} -E echo "==================================================================="
     COMMAND ${CMAKE_COMMAND} -E echo "The AU component is located at:"
-    COMMAND ${CMAKE_COMMAND} -E echo "${CMAKE_BINARY_DIR}/SurroundDelay_artefacts/AU/SurroundDelay.component"
+    COMMAND ${CMAKE_COMMAND} -E echo "${CMAKE_BINARY_DIR}/TapMatrix_artefacts/AU/TapMatrix.component"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "To install manually:"
-    COMMAND ${CMAKE_COMMAND} -E echo "  cp -r ${CMAKE_BINARY_DIR}/SurroundDelay_artefacts/AU/SurroundDelay.component ~/Library/Audio/Plug-Ins/Components/"
+    COMMAND ${CMAKE_COMMAND} -E echo "  cp -r ${CMAKE_BINARY_DIR}/TapMatrix_artefacts/AU/TapMatrix.component ~/Library/Audio/Plug-Ins/Components/"
     COMMAND ${CMAKE_COMMAND} -E echo ""
     COMMAND ${CMAKE_COMMAND} -E echo "Or use the install_au target:"
     COMMAND ${CMAKE_COMMAND} -E echo "  cmake --build . --target install_au"
     COMMAND ${CMAKE_COMMAND} -E echo "==================================================================="
     COMMAND ${CMAKE_COMMAND} -E echo ""
-    DEPENDS SurroundDelay
+    DEPENDS TapMatrix
 )
 
 # Custom install target for AU
@@ -81,8 +82,8 @@ add_custom_target(install_au
     COMMAND ${CMAKE_COMMAND} -E echo "Installing AU to ~/Library/Audio/Plug-Ins/Components/..."
     COMMAND ${CMAKE_COMMAND} -E make_directory "$ENV{HOME}/Library/Audio/Plug-Ins/Components"
     COMMAND ${CMAKE_COMMAND} -E copy_directory 
-        "${CMAKE_BINARY_DIR}/SurroundDelay_artefacts/AU/SurroundDelay.component"
-        "$ENV{HOME}/Library/Audio/Plug-Ins/Components/SurroundDelay.component"
+        "${CMAKE_BINARY_DIR}/TapMatrix_artefacts/AU/TapMatrix.component"
+        "$ENV{HOME}/Library/Audio/Plug-Ins/Components/TapMatrix.component"
     COMMAND ${CMAKE_COMMAND} -E echo "Installation complete!"
-    DEPENDS SurroundDelay
+    DEPENDS TapMatrix
 )

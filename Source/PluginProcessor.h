@@ -1,20 +1,86 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include <juce_dsp/juce_dsp.h>
+#include <array>
 
 //==============================================================================
 /**
- * SurroundDelay Audio Processor
- * 
- * This is the main audio processing class for the Surround Delay plugin.
- * Currently implements stereo pass-through processing.
+ * Single delay tap with feedback, crosstalk, damping, and reverb
  */
-class SurroundDelayAudioProcessor : public juce::AudioProcessor
+struct DelayTap
+{
+    // Per-tap circular buffer
+    juce::AudioBuffer<float> buffer;
+    int writePosition = 0;
+    int bufferLength = 0;
+    
+    // Per-tap state
+    float lastOutputSample = 0.0f;
+    float dampingCoeff = 1.0f;  // 1.0 = no damping, 0.0 = full damping
+    
+    // Tape mode - smooth delay time changes
+    float currentDelaySamples = 0.0f;  // Current smoothed delay time
+    float targetDelaySamples = 0.0f;   // Target delay time
+    
+    // Tempo sync state (stored separately from TIME mode)
+    bool useSyncMode = false;           // true = SYNC (beats), false = TIME (ms)
+    float syncDelayBeats = 0.0f;        // Delay in quarter notes (0-10)
+    
+    // Per-tap mono reverb instance
+    juce::dsp::Reverb reverb;
+    
+    void prepareToPlay (double sampleRate, int maxDelayMs)
+    {
+        bufferLength = static_cast<int> (sampleRate * maxDelayMs / 1000.0);
+        buffer.setSize (1, bufferLength);  // Mono buffer per tap
+        buffer.clear();
+        writePosition = 0;
+        lastOutputSample = 0.0f;
+        currentDelaySamples = 0.0f;
+        targetDelaySamples = 0.0f;
+    }
+    
+    void reset()
+    {
+        buffer.clear();
+        writePosition = 0;
+        lastOutputSample = 0.0f;
+        currentDelaySamples = 0.0f;
+        targetDelaySamples = 0.0f;
+    }
+};
+
+//==============================================================================
+/**
+ * Global Reverb Type Selection
+ */
+enum class ReverbType
+{
+    Dark = 0,
+    Short,
+    Medium,
+    Long,
+    XXXL
+};
+
+//==============================================================================
+/**
+ * TapMatrix Audio Processor
+ * 
+ * 8-tap spatial delay plugin with:
+ * - Independent delay taps with feedback and crosstalk
+ * - Per-tap 3D panning (XYZ)
+ * - Per-tap reverb
+ * - Global filtering and ducking
+ * - Tape mode for smooth delay modulation
+ */
+class TapMatrixAudioProcessor : public juce::AudioProcessor
 {
 public:
     //==============================================================================
-    SurroundDelayAudioProcessor();
-    ~SurroundDelayAudioProcessor() override;
+    TapMatrixAudioProcessor();
+    ~TapMatrixAudioProcessor() override;
 
     //==============================================================================
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
@@ -23,6 +89,13 @@ public:
     bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
 
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    
+    // Helper: Convert quarter notes to milliseconds at given BPM
+    static float beatsToMs (float quarterNotes, double bpm)
+    {
+        if (bpm <= 0.0) return 0.0f;
+        return static_cast<float> ((quarterNotes * 60000.0) / bpm);
+    }
 
     //==============================================================================
     juce::AudioProcessorEditor* createEditor() override;
@@ -50,25 +123,76 @@ public:
     //==============================================================================
     // Public access to parameters for editor
     juce::AudioProcessorValueTreeState& getParameters() { return parameters; }
+    
+    //==============================================================================
+    // Factory presets
+    void loadFactoryPreset (int presetIndex);
+    static constexpr int NUM_FACTORY_PRESETS = 8;
 
 private:
     //==============================================================================
+    static constexpr int NUM_TAPS = 8;
+    static constexpr int MAX_DELAY_MS = 2500;
+    
     // Parameter tree state for automation and preset management
     juce::AudioProcessorValueTreeState parameters;
     
-    // Parameter IDs
-    static constexpr const char* PARAM_DELAY_TIME = "delayTime";
-    static constexpr const char* PARAM_FEEDBACK = "feedback";
-    static constexpr const char* PARAM_MIX = "mix";
+    // 8 independent delay taps
+    std::array<DelayTap, NUM_TAPS> taps;
     
-    // Delay buffers (one per channel, up to 8 channels for 7.1)
-    juce::AudioBuffer<float> delayBuffer;
-    int delayBufferLength = 0;
-    int writePosition = 0;
+    // Mono sum buffer (input is always summed to mono)
+    juce::AudioBuffer<float> monoInputBuffer;
+    
+    // Temporary buffer for tap outputs before panning
+    juce::AudioBuffer<float> tapOutputBuffer;
+    
+    // Crosstalk matrix (8x8, diagonal is zero)
+    std::array<std::array<float, NUM_TAPS>, NUM_TAPS> crosstalkMatrix;
+    
+    // Global processing chain
+    // HPF/LPF filters (12dB/oct = 2-pole = StateVariableFilter)
+    static constexpr int MAX_CHANNELS = 8;  // Support up to 7.1
+    std::array<juce::dsp::StateVariableTPTFilter<float>, MAX_CHANNELS> hpFilters;
+    std::array<juce::dsp::StateVariableTPTFilter<float>, MAX_CHANNELS> lpFilters;
+    
+    // Dry signal buffer for mixing
+    juce::AudioBuffer<float> dryBuffer;
+    
+    // Ducking envelope follower state
+    float duckingEnvelope = 0.0f;
     
     // Helper functions
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    float getDelayTimeSamples() const;
+    void processTaps (const float* monoInput, int numSamples, double bpm);
+    void applyCrosstalk (int numSamples);
+    void applyPanning (juce::AudioBuffer<float>& outputBuffer, int numSamples);
     
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SurroundDelayAudioProcessor)
+    // 3D Panning helpers
+    void panTapToStereo (int tapIndex, float* leftOut, float* rightOut, int numSamples);
+    void panTapTo51 (int tapIndex, juce::AudioBuffer<float>& outputBuffer, int numSamples);
+    void panTapTo71 (int tapIndex, juce::AudioBuffer<float>& outputBuffer, int numSamples);
+    
+    // Reverb configuration
+    void updateReverbParameters();
+    juce::dsp::Reverb::Parameters getReverbPreset (ReverbType type) const;
+    
+    // Global processing
+    void applyGlobalFilters (juce::AudioBuffer<float>& buffer, int numSamples);
+    void applyDucking (juce::AudioBuffer<float>& wetBuffer, const juce::AudioBuffer<float>& dryBuffer, int numSamples);
+    void applyDryWetMix (juce::AudioBuffer<float>& outputBuffer, const juce::AudioBuffer<float>& dryBuffer, 
+                         const juce::AudioBuffer<float>& wetBuffer, int numSamples);
+    
+    // Tape mode - cubic interpolation helper
+    static float cubicInterpolate (float y0, float y1, float y2, float y3, float frac);
+    
+    // Current reverb type
+    ReverbType currentReverbType = ReverbType::Medium;
+    
+    // Current preset index
+    int currentPresetIndex = 0;
+    
+    // Parameter ID generation helpers
+    static juce::String getTapParamID (const char* paramName, int tapIndex);
+    
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapMatrixAudioProcessor)
 };
