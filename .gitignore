@@ -1,0 +1,33 @@
+# Ignore build artifacts
+build/
+cmake-build-*/
+.cmake/
+
+# Ignore JUCE framework (cloned locally)
+JUCE/
+
+# Ignore IDE specific files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Ignore compiled binaries
+*.o
+*.a
+*.dylib
+*.component
+
+# Ignore temporary files
+*.tmp
+*.log

@@ -1,0 +1,13 @@
+{
+    "cmake.configureArgs": [
+        "-DJUCE_DIR=${workspaceFolder}/JUCE"
+    ],
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Unix Makefiles",
+    "files.associations": {
+        "*.h": "cpp",
+        "*.cpp": "cpp"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "editor.formatOnSave": false
+}
