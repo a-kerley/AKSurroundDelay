@@ -14,6 +14,7 @@ struct DelayTap
     juce::AudioBuffer<float> buffer;
     int writePosition = 0;
     int bufferLength = 0;
+    int bufferMask = 0;  // For fast power-of-2 wrapping
     
     // Per-tap state
     float lastOutputSample = 0.0f;
@@ -30,9 +31,15 @@ struct DelayTap
     // Per-tap mono reverb instance
     juce::dsp::Reverb reverb;
     
+    // Level metering (pre-pan)
+    std::atomic<float> currentLevel { 0.0f };  // RMS level for UI display
+    
     void prepareToPlay (double sampleRate, int maxDelayMs)
     {
-        bufferLength = static_cast<int> (sampleRate * maxDelayMs / 1000.0);
+        // Use power-of-2 for fast wrapping with bitmask
+        int desiredLength = static_cast<int> (sampleRate * maxDelayMs / 1000.0);
+        bufferLength = juce::nextPowerOfTwo (desiredLength);
+        bufferMask = bufferLength - 1;
         buffer.setSize (1, bufferLength);  // Mono buffer per tap
         buffer.clear();
         writePosition = 0;
@@ -124,6 +131,14 @@ public:
     // Public access to parameters for editor
     juce::AudioProcessorValueTreeState& getParameters() { return parameters; }
     
+    // Get tap level for metering (0.0 to 1.0)
+    float getTapLevel (int tapIndex) const
+    {
+        if (tapIndex >= 0 && tapIndex < NUM_TAPS)
+            return taps[tapIndex].currentLevel.load();
+        return 0.0f;
+    }
+    
     //==============================================================================
     // Factory presets
     void loadFactoryPreset (int presetIndex);
@@ -146,6 +161,9 @@ private:
     // Temporary buffer for tap outputs before panning
     juce::AudioBuffer<float> tapOutputBuffer;
     
+    // Pre-allocated crosstalk buffer (avoid real-time allocation)
+    juce::AudioBuffer<float> crosstalkBuffer;
+    
     // Crosstalk matrix (8x8, diagonal is zero)
     std::array<std::array<float, NUM_TAPS>, NUM_TAPS> crosstalkMatrix;
     
@@ -158,8 +176,11 @@ private:
     // Dry signal buffer for mixing
     juce::AudioBuffer<float> dryBuffer;
     
-    // Ducking envelope follower state
-    float duckingEnvelope = 0.0f;
+    // Ducking envelope follower state (squared domain for performance)
+    float duckingEnvelopeSq = 0.0f;
+    
+    // Thread-safe reverb parameter updates
+    std::atomic<bool> reverbParamsNeedUpdate { false };
     
     // Helper functions
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();

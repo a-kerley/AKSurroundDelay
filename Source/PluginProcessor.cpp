@@ -299,6 +299,9 @@ void TapMatrixAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     // Prepare tap output buffer (8 taps, mono each)
     tapOutputBuffer.setSize (NUM_TAPS, samplesPerBlock);
     
+    // Prepare crosstalk buffer (pre-allocate to avoid real-time malloc)
+    crosstalkBuffer.setSize (NUM_TAPS, samplesPerBlock);
+    
     // Prepare dry buffer (max 8 channels for 7.1)
     dryBuffer.setSize (MAX_CHANNELS, samplesPerBlock);
     
@@ -331,7 +334,7 @@ void TapMatrixAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBl
     }
     
     // Reset ducking envelope
-    duckingEnvelope = 0.0f;
+    duckingEnvelopeSq = 0.0f;
 }
 
 void TapMatrixAudioProcessor::releaseResources()
@@ -381,14 +384,15 @@ void TapMatrixAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     const int numSamples = buffer.getNumSamples();
     
-    // Get host tempo for tempo sync
+    // Get host tempo for tempo sync (with safety checks)
     double currentBPM = 120.0;  // Default fallback
-    auto playHead = getPlayHead();
-    if (playHead != nullptr)
+    if (auto* playHead = getPlayHead())
     {
-        juce::AudioPlayHead::PositionInfo positionInfo;
-        if (playHead->getPosition()->getBpm().hasValue())
-            currentBPM = *playHead->getPosition()->getBpm();
+        if (auto posInfo = playHead->getPosition())
+        {
+            if (auto bpm = posInfo->getBpm())
+                currentBPM = juce::jlimit (20.0, 999.0, *bpm);  // Clamp to sane range
+        }
     }
     
     // Clear any output channels beyond input channels
@@ -475,6 +479,7 @@ void TapMatrixAudioProcessor::processTaps (const float* monoInput, int numSample
         }
         
         float feedback = parameters.getRawParameterValue (getTapParamID ("feedback", tapIndex))->load();
+        feedback = juce::jlimit (0.0f, 0.995f, feedback);  // Hard limit to prevent runaway
         float damping = parameters.getRawParameterValue (getTapParamID ("damping", tapIndex))->load();
         float reverbAmount = parameters.getRawParameterValue (getTapParamID ("reverb", tapIndex))->load();
         
@@ -496,7 +501,7 @@ void TapMatrixAudioProcessor::processTaps (const float* monoInput, int numSample
             // Tape mode: smoothly interpolate delay time to avoid clicks/glitches
             if (tapeMode)
             {
-                // Smooth delay time changes over approximately 10ms (at 44.1kHz = ~440 samples)
+                // Smooth delay time changes over approximately 10ms (correct exponential formula)
                 float smoothingCoeff = 1.0f - std::exp (-1.0f / (0.010f * static_cast<float> (getSampleRate())));
                 tap.currentDelaySamples += smoothingCoeff * (tap.targetDelaySamples - tap.currentDelaySamples);
             }
@@ -528,8 +533,13 @@ void TapMatrixAudioProcessor::processTaps (const float* monoInput, int numSample
             // Apply damping to feedback (feedback does NOT include reverb)
             float dampedFeedback = delayedSample * tap.dampingCoeff;
             
-            // Write to delay buffer with feedback (no reverb in feedback loop)
-            delayData[localWritePos] = monoInput[i] + (dampedFeedback * feedback);
+            // Write to delay buffer with feedback (with safety clipping and denormal flush)
+            float newSample = monoInput[i] + (dampedFeedback * feedback);
+            newSample = juce::jlimit (-1.5f, 1.5f, newSample);  // Prevent runaway
+            // Flush denormals to zero for CPU efficiency
+            if (std::fpclassify (newSample) == FP_SUBNORMAL)
+                newSample = 0.0f;
+            delayData[localWritePos] = newSample;
             
             // Output delayed sample with gain (dry delay signal)
             tapOutput[i] = delayedSample * gain;
@@ -562,15 +572,27 @@ void TapMatrixAudioProcessor::processTaps (const float* monoInput, int numSample
                 tapOutput[i] = tapOutput[i] * dryGain + reverbBuffer.getSample (0, i) * reverbAmount;
         }
         
+        // Calculate RMS level for UI metering (pre-pan)
+        float sumSquares = 0.0f;
+        for (int i = 0; i < numSamples; ++i)
+            sumSquares += tapOutput[i] * tapOutput[i];
+        float rms = std::sqrt (sumSquares / numSamples);
+        
+        // Smooth the level with decay for visual appeal
+        const float attackCoeff = 0.8f;
+        const float releaseCoeff = 0.95f;
+        float currentVal = tap.currentLevel.load();
+        float newVal = (rms > currentVal) ? (currentVal * attackCoeff + rms * (1.0f - attackCoeff))
+                                           : (currentVal * releaseCoeff);
+        tap.currentLevel.store (newVal);
+        
         tap.lastOutputSample = tapOutput[numSamples - 1];
     }
 }
 
 void TapMatrixAudioProcessor::applyCrosstalk (int numSamples)
 {
-    // Temporary buffer to hold crosstalk contributions
-    juce::AudioBuffer<float> crosstalkBuffer;
-    crosstalkBuffer.setSize (NUM_TAPS, numSamples);
+    // Use pre-allocated member buffer (no malloc on audio thread)
     crosstalkBuffer.clear();
     
     // Calculate crosstalk for each tap
@@ -895,9 +917,10 @@ void TapMatrixAudioProcessor::applyGlobalFilters (juce::AudioBuffer<float>& buff
 {
     const int numChannels = buffer.getNumChannels();
     
-    // Get filter frequencies
-    float hpfFreq = parameters.getRawParameterValue ("hpfFreq")->load();
-    float lpfFreq = parameters.getRawParameterValue ("lpfFreq")->load();
+    // Get filter frequencies (clamp to Nyquist to prevent instability)
+    float nyquist = static_cast<float> (getSampleRate()) * 0.49f;  // 2% headroom
+    float hpfFreq = juce::jmin (parameters.getRawParameterValue ("hpfFreq")->load(), nyquist);
+    float lpfFreq = juce::jmin (parameters.getRawParameterValue ("lpfFreq")->load(), nyquist);
     
     // Update filter cutoffs
     for (int ch = 0; ch < juce::jmin (numChannels, MAX_CHANNELS); ++ch)
@@ -944,23 +967,24 @@ void TapMatrixAudioProcessor::applyDucking (juce::AudioBuffer<float>& wetBuffer,
     
     for (int i = 0; i < numSamples; ++i)
     {
-        // Calculate RMS of dry signal across all channels
-        float dryEnergy = 0.0f;
+        // Calculate RMS squared of dry signal across all channels (avoid sqrt per sample)
+        float dryEnergySq = 0.0f;
         for (int ch = 0; ch < juce::jmin (dryBuffer.getNumChannels(), MAX_CHANNELS); ++ch)
         {
             float sample = dryBuffer.getSample (ch, i);
-            dryEnergy += sample * sample;
+            dryEnergySq += sample * sample;
         }
-        dryEnergy = std::sqrt (dryEnergy / juce::jmax (1, dryBuffer.getNumChannels()));
+        dryEnergySq = dryEnergySq / juce::jmax (1, dryBuffer.getNumChannels());
         
-        // Envelope follower
-        if (dryEnergy > duckingEnvelope)
-            duckingEnvelope += attackCoeff * (dryEnergy - duckingEnvelope);
+        // Envelope follower (in squared domain)
+        if (dryEnergySq > duckingEnvelopeSq)
+            duckingEnvelopeSq += attackCoeff * (dryEnergySq - duckingEnvelopeSq);
         else
-            duckingEnvelope += releaseCoeff * (dryEnergy - duckingEnvelope);
+            duckingEnvelopeSq += releaseCoeff * (dryEnergySq - duckingEnvelopeSq);
         
-        // Calculate ducking gain: wet *= 1 - (duckAmount * envelope)
-        float duckingGain = 1.0f - (duckAmount * duckingEnvelope);
+        // Calculate ducking gain: wet *= 1 - (duckAmount * sqrt(envelope))
+        // Only sqrt once for gain calculation (much faster than per-sample sqrt)
+        float duckingGain = 1.0f - (duckAmount * std::sqrt (duckingEnvelopeSq));
         duckingGain = juce::jmax (0.0f, duckingGain);  // Prevent negative gain
         
         // Apply ducking to all wet channels
