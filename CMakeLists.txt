@@ -28,7 +28,7 @@ juce_add_plugin(TapMatrix
     COMPANY_NAME "ClipPoint"
     PLUGIN_MANUFACTURER_CODE Ycom
     PLUGIN_CODE TpMx
-    FORMATS AU
+    FORMATS AU Standalone
     PRODUCT_NAME "TapMatrix"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
@@ -44,6 +44,8 @@ target_sources(TapMatrix
     PRIVATE
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
+        Source/CustomLookAndFeel.cpp
+        Source/SliderModule.cpp
 )
 
 # Link JUCE modules

@@ -21,14 +21,93 @@ AKSurroundDelay/
 ├── CMakeLists.txt              # JUCE build configuration
 ├── JUCE/                       # Local JUCE framework (git-ignored)
 ├── Source/
-│   ├── PluginProcessor.h       # SurroundDelayAudioProcessor
+│   ├── PluginProcessor.h       # TapMatrixAudioProcessor (formerly SurroundDelay)
 │   ├── PluginProcessor.cpp
-│   ├── PluginEditor.h          # SurroundDelayAudioProcessorEditor
-│   └── PluginEditor.cpp
+│   ├── PluginEditor.h          # TapMatrixAudioProcessorEditor
+│   ├── PluginEditor.cpp
+│   ├── CustomLookAndFeel.h     # Custom LookAndFeel for SVG-based UI
+│   ├── CustomLookAndFeel.cpp
+│   ├── SliderModule.h          # Reusable vertical slider component
+│   └── SliderModule.cpp
+├── assets/                     # SVG assets for UI elements
+│   ├── SliderTrack.svg         # 38×170px slider track (white)
+│   └── SliderThumb.svg         # 34×13px slider thumb (white)
 ├── build/                      # CMake build directory
 └── .vscode/
     └── settings.json           # CMake configuration
 ```
+
+## UI Component System
+
+### SliderModule - Reusable Vertical Slider
+A fully-featured, SVG-based vertical slider component with:
+- **SVG Rendering**: Track (38×170px) and thumb (34×13px) loaded from `assets/`
+- **Value Display**: Shows parameter value inside the moving thumb
+- **Parameter Label**: Displays parameter name below the slider
+- **Color Tinting**: Per-slider accent color that tints both track and thumb SVGs
+- **Dynamic Reassignment**: Can be reassigned to different parameters on-the-fly
+- **Configurable Styling**: All dimensions, fonts, and colors defined as static constants
+
+#### Key Features
+```cpp
+// Create a slider module
+SliderModule gainSlider {"GAIN"};
+
+// Set custom color (tints SVG track and thumb)
+gainSlider.setAccentColour (juce::Colours::blue);
+
+// Attach to parameter
+gainSlider.attachToParameter (apvts, "gain");
+
+// Later, reassign to different parameter (useful for context-switching UIs)
+gainSlider.attachToParameter (apvts, "gain_tap2");
+gainSlider.setLabelText ("GAIN TAP 2");
+
+// Detach from parameter
+gainSlider.detachFromParameter();
+```
+
+#### How Color Tinting Works
+1. Each `SliderModule` stores an `accentColour` (default: white)
+2. When drawing, `CustomLookAndFeel::drawLinearSlider()` gets the parent `SliderModule`
+3. It clones the SVG drawables and uses `replaceColour()` to tint white/black/stroke colors
+4. Both track and thumb SVGs are recolored with the accent color
+5. This allows per-slider colors without modifying the original SVG assets
+
+Example: Hue control slider updates colors dynamically:
+```cpp
+// In editor's onValueChange callback
+float hue = hueSlider.getSlider().getValue() / 360.0f;
+auto colour = juce::Colour::fromHSV (hue, 0.8f, 0.9f, 1.0f);
+mixSlider.setAccentColour (colour);
+hueSlider.setAccentColour (colour);
+mixSlider.repaint();
+hueSlider.repaint();
+```
+
+#### Customizable Constants (SliderModule.h)
+```cpp
+// Dimensions (match SVG assets)
+static constexpr float trackWidth = 38.0f;
+static constexpr float trackHeight = 170.0f;
+static constexpr float thumbWidth = 34.0f;
+static constexpr float thumbHeight = 13.0f;
+static constexpr float thumbPadding = 2.0f;
+
+// Text styling
+static constexpr float valueFontSize = 9.0f;
+static constexpr float labelFontSize = 10.0f;
+static constexpr int valueDecimalPlaces = 2;
+static inline const juce::Colour valueTextColour {0xff1a1a1a};
+static inline const juce::Colour labelTextColour {0xffaaaaaa};
+```
+
+### CustomLookAndFeel
+- Loads SVG assets from absolute path: `/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets/`
+- Handles SVG color replacement for per-slider tinting
+- Replaces white (#FFFFFF), black (#000000), and stroke color (#F2F2F7) with accent color
+- Smart value formatting: 0-1 range shows decimals, larger values show integers
+- Constrains thumb travel with `jlimit()` to prevent overflow (2px padding)
 
 ## Build Instructions
 
@@ -162,6 +241,7 @@ Plugin is ad-hoc signed during build. For distribution, proper code signing will
 - When adding features, maintain stereo compatibility first
 - Follow JUCE 7.x best practices (FontOptions, modern API patterns)
 - Only suggest `killall -9 AudioComponentRegistrar` when plugin metadata changes
+- **After UI changes**: Always run standalone app via terminal to see debug output: `"path/to/TapMatrix.app/Contents/MacOS/TapMatrix" 2>&1` (not via `open` command)
 
 ## Quick Reference Commands
 ```bash
