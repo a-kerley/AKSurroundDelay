@@ -174,6 +174,19 @@ Modern JUCE doesn't use `JuceHeader.h`. Use specific module includes:
 #include <JuceHeader.h>
 ```
 
+### Color Definitions
+ALWAYS use 8-digit hex format (0xAARRGGBB) with hex color comments for VS Code color picker:
+
+```cpp
+// ✅ CORRECT - enables VS Code color picker
+juce::Colour myColor {0xff1a1a1a}; /* #1a1a1a */
+static inline const juce::Colour accentColor {0xffff5500}; /* #ff5500 */
+
+// ❌ WRONG - no color picker support
+juce::Colour myColor {0xff1a1a1a}; // missing hex comment
+juce::Colour myColor = juce::Colours::blue; // named colors don't show picker
+```
+
 ### Class Names
 - Processor: `SurroundDelayAudioProcessor`
 - Editor: `SurroundDelayAudioProcessorEditor`

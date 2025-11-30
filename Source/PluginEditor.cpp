@@ -11,6 +11,7 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Setup mix slider
     mixSlider.getSlider().setLookAndFeel (&customLookAndFeel);
     mixSlider.attachToParameter (p.getParameters(), "mix");
+    mixSlider.setShowDebugBorder (true);  // Enable debug border
     addAndMakeVisible (mixSlider);
     
     // Setup hue slider (for testing color system)
@@ -18,6 +19,7 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     hueSlider.getSlider().setRange (0.0, 360.0, 1.0);  // Match parameter range
     hueSlider.attachToParameter (p.getParameters(), "hue");
     hueSlider.getSlider().onValueChange = [this]() { updateSliderColors(); };
+    hueSlider.setShowDebugBorder (true);  // Enable debug border
     addAndMakeVisible (hueSlider);
     
     // Set plugin window size (1100 × 700)
@@ -32,8 +34,8 @@ TapMatrixAudioProcessorEditor::~TapMatrixAudioProcessorEditor()
 //==============================================================================
 void TapMatrixAudioProcessorEditor::paint (juce::Graphics& g)
 {
-    // Clean dark background (AARRGGBB format)
-    g.fillAll (juce::Colour (0xff1a1a1a));
+    // Clean dark background
+    g.fillAll (juce::Colour (0xff1a1a1a)); /* #1a1a1a */
     
     // Draw center crosshair for layout reference
     g.setColour (juce::Colours::grey.withAlpha (0.3f));
@@ -50,10 +52,14 @@ void TapMatrixAudioProcessorEditor::resized()
     int centerX = bounds.getCentreX();
     int centerY = bounds.getCentreY();
     
-    // Position sliders side by side (each 80px wide + 210px tall)
+    // Use SliderModule's ideal size calculations
+    int sliderWidth = SliderModule::getIdealWidth();
+    int sliderHeight = SliderModule::getIdealHeight();
+    
+    // Position sliders side by side at their ideal sizes
     // Mix slider on left, Hue slider on right
-    mixSlider.setBounds (centerX - 100, centerY - 105, 80, 210);
-    hueSlider.setBounds (centerX + 20, centerY - 105, 80, 210);
+    mixSlider.setBounds (centerX - 100, centerY - sliderHeight/2, sliderWidth, sliderHeight);
+    hueSlider.setBounds (centerX + 20, centerY - sliderHeight/2, sliderWidth, sliderHeight);
 }
 
 void TapMatrixAudioProcessorEditor::updateSliderColors()

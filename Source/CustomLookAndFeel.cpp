@@ -88,21 +88,26 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         }
         else
         {
-            // Fallback: draw a simple track (light gray, AARRGGBB)
+            // Fallback: draw a simple track
             auto fallbackTrackWidth = 2.0f;
             auto trackX = x + width * 0.5f - fallbackTrackWidth * 0.5f;
-            g.setColour (juce::Colour (0xffe0e0e0));
+            g.setColour (juce::Colour (0xffe0e0e0)); /* #e0e0e0 */
             g.fillRect (trackX, (float) y, fallbackTrackWidth, (float) height);
         }
         
-        // 2. Draw the thumb with constrained positioning
-        // Constrain thumb position to stay within track bounds
-        float topLimit = y + SliderModule::thumbPadding;
-        float bottomLimit = y + height - SliderModule::thumbPadding;
-        float constrainedPos = juce::jlimit (topLimit, bottomLimit, sliderPos);
+        // 2. Draw the thumb with padding
+        // Get padding value from parent SliderModule and remap thumb position
+        float padding = 0.0f;
+        if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+            padding = SliderModule::thumbPadding;
+        
+        // Remap sliderPos to account for padding
+        float proportion = (sliderPos - y) / height;
+        float paddedHeight = height - (padding * 2);
+        float paddedPos = y + padding + (proportion * paddedHeight);
         
         auto thumbX = x + width * 0.5f - SliderModule::thumbWidth * 0.5f;
-        auto thumbY = constrainedPos - SliderModule::thumbHeight * 0.5f;
+        auto thumbY = paddedPos - SliderModule::thumbHeight * 0.5f;
         auto thumbBounds = juce::Rectangle<float> (thumbX, thumbY, SliderModule::thumbWidth, SliderModule::thumbHeight);
         
         if (sliderThumbDrawable)
@@ -129,12 +134,21 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
             g.setColour (SliderModule::valueTextColour);
             g.setFont (juce::FontOptions (SliderModule::valueFontSize, juce::Font::bold));
             
+            // Get the value suffix and decimal places from parent SliderModule (if available)
+            juce::String suffix;
+            int decimalPlaces = 2;  // Default
+            if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+            {
+                suffix = sliderModule->getValueSuffix();
+                decimalPlaces = sliderModule->getDecimalPlaces();
+            }
+            
             // Format value based on range (0-1 shows decimals, larger shows integers)
             juce::String valueText;
             if (value <= 1.0f && value >= 0.0f)
-                valueText = juce::String (value, SliderModule::valueDecimalPlaces);
+                valueText = juce::String (value, decimalPlaces) + suffix;
             else
-                valueText = juce::String ((int)value);  // Integer for larger values
+                valueText = juce::String ((int)value) + suffix;  // Integer for larger values
             
             g.drawText (valueText, thumbBounds, juce::Justification::centred, false);
         }

@@ -40,8 +40,8 @@ private:
     std::unique_ptr<juce::Drawable> sliderTrackDrawable;
     std::unique_ptr<juce::Drawable> sliderThumbDrawable;
     
-    // Default fill color (green, AARRGGBB format)
-    juce::Colour fillColour {0xff00a985};
+    // Default fill color
+    juce::Colour fillColour {0xff00a985}; /* #00a985 */
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CustomLookAndFeel)
 };

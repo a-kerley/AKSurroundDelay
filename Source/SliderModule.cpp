@@ -4,11 +4,15 @@ SliderModule::SliderModule (const juce::String& labelText)
 {
     // Setup slider
     slider.setSliderStyle (juce::Slider::LinearVertical);
-    slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 20);  // Enable text entry on double-click
     slider.setColour (juce::Slider::backgroundColourId, juce::Colours::transparentBlack);
     slider.setColour (juce::Slider::trackColourId, juce::Colours::transparentBlack);
+    slider.setColour (juce::Slider::textBoxTextColourId, juce::Colours::white);
+    slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colour (0xff2a2a2a)); /* #2a2a2a */
+    slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setRange (0.0, 1.0, 0.01); // Set explicit range
     slider.setValue (0.5, juce::dontSendNotification); // Set default value
+    slider.setDoubleClickReturnValue (true, 0.5);  // Cmd+click resets to default (0.5)
     addAndMakeVisible (slider);
     
     // Setup name label (below slider)
@@ -76,19 +80,30 @@ void SliderModule::updateValueLabel()
 
 void SliderModule::paint (juce::Graphics& g)
 {
-    // Optional: draw background or border
+    // Draw debug border if enabled
+    if (showDebugBorder)
+    {
+        g.setColour (juce::Colours::red);
+        g.drawRect (getLocalBounds(), 1);
+    }
 }
 
 void SliderModule::resized()
 {
     auto bounds = getLocalBounds();
     
-    // Layout: [Slider] [Name Label]
-    // Name label below slider
-    nameLabel.setBounds (bounds.removeFromBottom (16));
+    // Remove component padding from all sides
+    bounds.removeFromTop ((int)componentPaddingTop);
+    bounds.removeFromBottom ((int)componentPaddingBottom);
+    bounds.removeFromLeft ((int)componentPaddingLeft);
+    bounds.removeFromRight ((int)componentPaddingRight);
     
-    // Keep slider at full track height so track doesn't get clipped
-    // The thumb travel will be constrained in CustomLookAndFeel
+    // Layout: [Slider] [Spacing] [Name Label]
+    // Name label below slider with configurable spacing
+    nameLabel.setBounds (bounds.removeFromBottom ((int)labelHeight));
+    bounds.removeFromBottom ((int)labelSpacing);  // Add spacing gap
+    
+    // Slider at full track height - padding is applied in CustomLookAndFeel
     auto sliderBounds = bounds.withSizeKeepingCentre ((int)trackWidth, (int)trackHeight);
     slider.setBounds (sliderBounds);
 }

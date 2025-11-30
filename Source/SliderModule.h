@@ -31,16 +31,21 @@ public:
     static constexpr float trackHeight = 170.0f;    // Height of slider track SVG
     static constexpr float thumbWidth = 34.0f;      // Width of slider thumb SVG
     static constexpr float thumbHeight = 13.0f;     // Height of slider thumb SVG
-    static constexpr float thumbPadding = 2.0f;     // Padding at top/bottom to prevent thumb overflow
+    static constexpr float thumbPadding = -3.0f;     // Padding at top/bottom to prevent thumb overflow
     
     //==========================================================================
     // TEXT STYLING - Adjust fonts and colors here
     //==========================================================================
-    static constexpr float valueFontSize = 9.0f;              // Font size for value text in thumb
+    static constexpr float labelSpacing = 5.0f;               // Spacing between slider bottom and label
+    static constexpr float labelHeight = 16.0f;                 // Height reserved for parameter label
+    static constexpr float componentPaddingTop = 10.0f;          // Extra padding above slider
+    static constexpr float componentPaddingBottom = 5.0f;       // Extra padding below label
+    static constexpr float componentPaddingLeft = 10.0f;         // Extra padding left of slider
+    static constexpr float componentPaddingRight = 10.0f;        // Extra padding right of slider
+    static constexpr float valueFontSize = 9.0f;                // Font size for value text in thumb
     static constexpr float labelFontSize = 10.0f;             // Font size for parameter name label
-    static constexpr int valueDecimalPlaces = 2;              // Decimal precision for value display
-    static inline const juce::Colour valueTextColour {0xff1a1a1a};  // Dark text on light thumb (AARRGGBB)
-    static inline const juce::Colour labelTextColour {0xffaaaaaa};  // Gray label text below slider (AARRGGBB)
+    static inline const juce::Colour valueTextColour {0xff1a1a1a};  /* #1a1a1a */ // Dark text on light thumb
+    static inline const juce::Colour labelTextColour {0xffaaaaaa};  /* #aaaaaaff */ // Gray label text below slider
     
     //==========================================================================
     // CONSTRUCTOR & DESTRUCTOR
@@ -78,6 +83,21 @@ public:
     /** Update the label text (useful when reassigning to different parameter) */
     void setLabelText (const juce::String& text);
     
+    /** Set the unit suffix displayed after the value (e.g., "dB", "ms", "%", "Hz") */
+    void setValueSuffix (const juce::String& suffix) { valueSuffix = suffix; }
+    
+    /** Get the current value suffix */
+    juce::String getValueSuffix() const { return valueSuffix; }
+    
+    /** Set the number of decimal places for value display */
+    void setDecimalPlaces (int places) { valueDecimalPlaces = places; }
+    
+    /** Get the number of decimal places for value display */
+    int getDecimalPlaces() const { return valueDecimalPlaces; }
+    
+    /** Enable/disable debug border to visualize component bounds */
+    void setShowDebugBorder (bool show) { showDebugBorder = show; repaint(); }
+    
     //==========================================================================
     // ACCESSORS
     //==========================================================================
@@ -89,6 +109,18 @@ public:
     
     /** Get the current parameter ID this slider is attached to */
     juce::String getCurrentParameterID() const { return currentParameterID; }
+    
+    /** Get the ideal width for this component including padding */
+    static int getIdealWidth() 
+    { 
+        return (int)(trackWidth + componentPaddingLeft + componentPaddingRight); 
+    }
+    
+    /** Get the ideal height for this component including padding */
+    static int getIdealHeight() 
+    { 
+        return (int)(componentPaddingTop + trackHeight + labelSpacing + labelHeight + componentPaddingBottom); 
+    }
     
     //==========================================================================
     // COMPONENT OVERRIDES
@@ -106,7 +138,10 @@ private:
     
     juce::String parameterName;         // Display name (e.g., "GAIN")
     juce::String currentParameterID;    // Current APVTS parameter ID (e.g., "gain_tap1")
-    juce::Colour accentColour {0xffffffff};  // Custom accent color (white default, AARRGGBB)
+    juce::String valueSuffix;           // Unit suffix for value display (e.g., "dB", "ms", "%")
+    int valueDecimalPlaces = 1;         // Decimal precision for value display (default: 2)
+    juce::Colour accentColour {0xffffffff};  /* #ffffff */ // Custom accent color (white default)
+    bool showDebugBorder = false;       // Show debug border around component bounds
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
     
