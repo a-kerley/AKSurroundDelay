@@ -33,6 +33,11 @@ public:
     static constexpr float thumbHeight = 13.0f;     // Height of slider thumb SVG
     static constexpr float thumbPadding = -3.0f;     // Padding at top/bottom to prevent thumb overflow
     
+    // Fill bar spritesheet settings (170 frames at 4x scale)
+    static constexpr int spritesheetTotalFrames = 170;   // Total number of frames in spritesheet
+    static constexpr int spritesheetFrameWidth = 152;    // Frame width at 4x scale (38px × 4)
+    static constexpr int spritesheetFrameHeight = 680;   // Frame height at 4x scale (170px × 4)
+    
     //==========================================================================
     // TEXT STYLING - Adjust fonts and colors here
     //==========================================================================
@@ -144,6 +149,10 @@ private:
     bool showDebugBorder = false;       // Show debug border around component bounds
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
+    
+    // Fill bar image (loaded once, shared by all instances)
+    static juce::Image fillBarImage;
+    static bool fillBarImageLoaded;
     
     //==========================================================================
     // HELPER METHODS

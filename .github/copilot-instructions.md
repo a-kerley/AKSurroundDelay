@@ -244,17 +244,36 @@ auval -v aufx Srdl Ycom
 Plugin is ad-hoc signed during build. For distribution, proper code signing will be needed.
 
 ## AI Assistant Guidelines
+
+### Standard Workflow After Code Changes
+**ALWAYS follow this sequence after making ANY code changes:**
+
+1. **Build with parallel compilation**:
+   ```bash
+   cd /Users/alistairkerley/Documents/xCode\ Developments/AKSurroundDelay/build && cmake --build . -- -j8
+   ```
+
+2. **Run standalone app with debug output**:
+   ```bash
+   "/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/build/TapMatrix_artefacts/Debug/Standalone/TapMatrix.app/Contents/MacOS/TapMatrix" 2>&1
+   ```
+   - Run as **background process** (`isBackground: true`) so it doesn't block
+   - Print the debug console output to terminal in VS Code
+   - **NEVER** use `open` command - always use direct executable path with `2>&1` to capture stderr
+
+3. **Only when explicitly requested**: Validate with `auval -v aufx Srdl Ycom`
+
+### General Guidelines
 - **DO NOT auto-build** after making code changes - wait for explicit build request
 - When building, **ALWAYS use parallel builds**: `cmake --build . -- -j8`
 - When validating the plugin, **ALWAYS** use `auval -v aufx Srdl Ycom`
 - Never suggest `auval -a` or scanning all plugins
 - Use modern JUCE includes (module-specific, not JuceHeader.h)
-- Build artifacts are in `build/SurroundDelay_artefacts/Debug/` (Debug build)
+- Build artifacts are in `build/TapMatrix_artefacts/Debug/` (Debug build)
 - Plugin automatically installs to Components folder
 - When adding features, maintain stereo compatibility first
 - Follow JUCE 7.x best practices (FontOptions, modern API patterns)
 - Only suggest `killall -9 AudioComponentRegistrar` when plugin metadata changes
-- **After UI changes**: Always run standalone app via terminal to see debug output: `"path/to/TapMatrix.app/Contents/MacOS/TapMatrix" 2>&1` (not via `open` command)
 
 ## Quick Reference Commands
 ```bash
