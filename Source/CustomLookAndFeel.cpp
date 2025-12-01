@@ -14,20 +14,10 @@ CustomLookAndFeel::CustomLookAndFeel()
     auto thumbFile = assetsPath.getChildFile ("SliderThumb.svg");
     
     if (trackFile.existsAsFile())
-    {
         sliderTrackDrawable = juce::Drawable::createFromSVGFile (trackFile);
-        DBG ("Loaded SliderTrack.svg");
-    }
-    else
-        DBG ("SliderTrack.svg NOT FOUND at: " + trackFile.getFullPathName());
     
     if (thumbFile.existsAsFile())
-    {
         sliderThumbDrawable = juce::Drawable::createFromSVGFile (thumbFile);
-        DBG ("Loaded SliderThumb.svg");
-    }
-    else
-        DBG ("SliderThumb.svg NOT FOUND at: " + thumbFile.getFullPathName());
 }
 
 void CustomLookAndFeel::setSliderTrackImage (const juce::Image& trackImage)
@@ -57,14 +47,7 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         // Get accent color from parent SliderModule (if available)
         juce::Colour tintColour = juce::Colours::white;  // Default: no tint
         if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
-        {
             tintColour = sliderModule->getAccentColour();
-            DBG ("Drawing slider with tint: " + tintColour.toDisplayString (true));
-        }
-        else
-        {
-            DBG ("No SliderModule parent found!");
-        }
         
         // Draw using SVG assets or fallback
         

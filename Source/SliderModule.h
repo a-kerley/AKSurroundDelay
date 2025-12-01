@@ -151,7 +151,6 @@ private:
     //==========================================================================
     juce::Slider slider;                // The underlying JUCE slider control
     juce::Label nameLabel;              // Parameter name label (below slider)
-    juce::Label valueLabel;             // Value label (currently unused - value shown in thumb)
     
     juce::String parameterName;         // Display name (e.g., "GAIN")
     juce::String currentParameterID;    // Current APVTS parameter ID (e.g., "gain_tap1")
@@ -174,8 +173,6 @@ private:
     //==========================================================================
     // HELPER METHODS
     //==========================================================================
-    void updateValueLabel();  // Update value label (currently unused)
-    
     static void loadColorVariants();  // Load all pre-cached color variants from disk
     static void generateColorVariantCache();  // Generate and save color variants (call once when colors change)
     static const juce::Image& getVariantForColor (const juce::Colour& colour);  // Get nearest variant

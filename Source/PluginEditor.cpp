@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "ColorPalette.h"
 
 //==============================================================================
 TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProcessor& p)
@@ -72,41 +73,11 @@ void TapMatrixAudioProcessorEditor::updateSliderColors()
     if (!std::isfinite (value))
         return;
     
-    // Define the 10 palette colors
-    static const juce::Array<juce::Colour> paletteColors = {
-        juce::Colour (0xff3d3a5c), /* #3d3a5c */
-        juce::Colour (0xff2b5876), /* #2b5876 */
-        juce::Colour (0xff2a6f7f), /* #2a6f7f */
-        juce::Colour (0xff32987e), /* #32987e */
-        juce::Colour (0xff54c181), /* #54c181 */
-        juce::Colour (0xff70b861), /* #70b861 */
-        juce::Colour (0xff9cae4d), /* #9cae4d */
-        juce::Colour (0xffc1a03e), /* #c1a03e */
-        juce::Colour (0xffc78441), /* #c78441 */
-        juce::Colour (0xffb76d3a)  /* #b76d3a */
-    };
-    
-    // Define matching text colors for each palette color
-    static const juce::Array<juce::Colour> textColors = {
-        juce::Colour (0xffd0d0d0), /* #d0d0d0 */ // Light grey for dark purple
-        juce::Colour (0xffc8c8c8), /* #c8c8c8 */ // Light grey for dark blue
-        juce::Colour (0xffc0c0c0), /* #c0c0c0 */ // Medium-light grey for teal
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Medium grey for sea green
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Medium-dark grey for mint
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Medium-dark grey for lime
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Dark grey for yellow-green
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Darker grey for gold
-        juce::Colour (0xff1e1e1e), /* #1e1e1e */ // Very dark grey for orange
-        juce::Colour (0xff1e1e1e)  /* #1e1e1e */ // Very dark grey for rust
-    };
-    
     // Get the selected color index (0-9)
-    int colorIndex = juce::jlimit (0, 9, (int)value);
-    auto colour = paletteColors[colorIndex];
-    auto textColour = textColors[colorIndex];
-    
-    DBG ("updateSliderColors called: index=" + juce::String(colorIndex) + 
-         " color=" + colour.toDisplayString (true));
+    int colorIndex = juce::jlimit (0, ColorPalette::paletteSize - 1, (int)value);
+    const auto& colorPair = ColorPalette::palettePairs[colorIndex];
+    auto colour = colorPair.background;
+    auto textColour = colorPair.text;
     
     // Apply to both sliders
     mixSlider.setAccentColour (colour);

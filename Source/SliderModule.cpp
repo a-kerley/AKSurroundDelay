@@ -1,4 +1,5 @@
 #include "SliderModule.h"
+#include "ColorPalette.h"
 
 // Static member initialization
 juce::Image SliderModule::fillBarImage;
@@ -32,14 +33,6 @@ SliderModule::SliderModule (const juce::String& labelText)
         addAndMakeVisible (nameLabel);
     }
     
-    // Setup value label (below slider) - temporarily disabled to avoid string assertions
-    valueLabel.setText ("", juce::dontSendNotification);
-    valueLabel.setFont (juce::FontOptions (11.0f));
-    valueLabel.setJustificationType (juce::Justification::centred);
-    valueLabel.setColour (juce::Label::textColourId, juce::Colour (0xffaaaaaa));
-    valueLabel.setVisible (false); // Hidden for now
-    addAndMakeVisible (valueLabel);
-    
     // Listen to slider changes to repaint fill bar
     slider.onValueChange = [this]() 
     { 
@@ -57,19 +50,11 @@ SliderModule::SliderModule (const juce::String& labelText)
             fillBarImage = juce::ImageCache::getFromFile (fillBarFile);
             if (!fillBarImage.isNull())
             {
-                DBG ("Loaded SliderFill_spritesheet.png - Size: " + 
-                     juce::String(fillBarImage.getWidth()) + "x" + 
-                     juce::String(fillBarImage.getHeight()) + 
-                     " (" + juce::String(spritesheetTotalFrames) + " frames)");
                 fillBarImageLoaded = true;
                 
                 // Load color variants
                 loadColorVariants();
             }
-        }
-        else
-        {
-            DBG ("SliderFill_spritesheet.png NOT FOUND at: " + fillBarFile.getFullPathName());
         }
     }
 }
@@ -104,15 +89,6 @@ void SliderModule::setLabelText (const juce::String& text)
     nameLabel.setText (text, juce::dontSendNotification);
 }
 
-void SliderModule::updateValueLabel()
-{
-    auto value = slider.getValue();
-    if (std::isfinite (value))
-        valueLabel.setText (juce::String (value, 1), juce::dontSendNotification);
-    else
-        valueLabel.setText ("--", juce::dontSendNotification);
-}
-
 void SliderModule::loadColorVariants()
 {
     if (colorVariantsLoaded)
@@ -133,12 +109,7 @@ void SliderModule::loadColorVariants()
     }
     
     if (!cacheExists)
-    {
-        DBG ("Color variant cache not found - generating cache files...");
         generateColorVariantCache();
-    }
-    
-    DBG ("Loading pre-cached color variants...");
     
     // Load each pre-cached color variant PNG file
     for (int i = 0; i < 10; ++i)
@@ -149,39 +120,17 @@ void SliderModule::loadColorVariants()
         {
             auto variantImage = juce::ImageCache::getFromFile (variantFile);
             if (!variantImage.isNull())
-            {
                 colorVariants[i] = variantImage;
-            }
-            else
-            {
-                DBG ("Failed to load: " + variantFile.getFileName());
-            }
-        }
-        else
-        {
-            DBG ("Color variant not found: " + variantFile.getFileName());
         }
     }
     
     colorVariantsLoaded = true;
-    DBG ("Loaded " + juce::String (colorVariants.size()) + " pre-cached color variants");
 }
 
 void SliderModule::generateColorVariantCache()
 {
-    // Define the 10 specific colors from the palette
-    juce::Array<juce::Colour> paletteColors = {
-        juce::Colour (0xff3d3a5c), /* #3d3a5c */
-        juce::Colour (0xff2b5876), /* #2b5876 */
-        juce::Colour (0xff2a6f7f), /* #2a6f7f */
-        juce::Colour (0xff32987e), /* #32987e */
-        juce::Colour (0xff54c181), /* #54c181 */
-        juce::Colour (0xff70b861), /* #70b861 */
-        juce::Colour (0xff9cae4d), /* #9cae4d */
-        juce::Colour (0xffc1a03e), /* #c1a03e */
-        juce::Colour (0xffc78441), /* #c78441 */
-        juce::Colour (0xffb76d3a)  /* #b76d3a */
-    };
+    // Get palette colors from central definition
+    auto paletteColors = ColorPalette::getBackgroundColors();
     
     // Ensure fill bar is loaded
     if (fillBarImage.isNull())
@@ -192,13 +141,11 @@ void SliderModule::generateColorVariantCache()
             fillBarImage = juce::ImageCache::getFromFile (fillBarFile);
     }
     
-    if (fillBarImage.isNull())
+    if (!fillBarImage.isValid())
     {
         DBG ("ERROR: Cannot generate color variants - source image not found");
         return;
     }
-    
-    DBG ("Generating and saving color variant cache...");
     
     auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
     
@@ -240,28 +187,14 @@ void SliderModule::generateColorVariantCache()
         {
             juce::PNGImageFormat pngFormat;
             pngFormat.writeImageToStream (tintedImage, outputStream);
-            DBG ("Saved: " + outputFile.getFileName() + " (" + colour.toDisplayString(true) + ")");
         }
     }
-    
-    DBG ("Color variant cache generation complete!");
 }
 
 const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour)
 {
-    // Define the same 10 palette colors for comparison
-    static const juce::Array<juce::Colour> paletteColors = {
-        juce::Colour (0xff3d3a5c), /* #3d3a5c */
-        juce::Colour (0xff2b5876), /* #2b5876 */
-        juce::Colour (0xff2a6f7f), /* #2a6f7f */
-        juce::Colour (0xff32987e), /* #32987e */
-        juce::Colour (0xff54c181), /* #54c181 */
-        juce::Colour (0xff70b861), /* #70b861 */
-        juce::Colour (0xff9cae4d), /* #9cae4d */
-        juce::Colour (0xffc1a03e), /* #c1a03e */
-        juce::Colour (0xffc78441), /* #c78441 */
-        juce::Colour (0xffb76d3a)  /* #b76d3a */
-    };
+    // Get palette colors from central definition
+    auto paletteColors = ColorPalette::getBackgroundColors();
     
     // Find the closest matching palette color
     int closestIndex = 0;
