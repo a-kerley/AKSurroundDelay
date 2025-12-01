@@ -3,6 +3,8 @@
 // Static member initialization
 juce::Image SliderModule::fillBarImage;
 bool SliderModule::fillBarImageLoaded = false;
+std::map<int, juce::Image> SliderModule::colorVariants;
+bool SliderModule::colorVariantsLoaded = false;
 
 SliderModule::SliderModule (const juce::String& labelText)
 {
@@ -48,7 +50,7 @@ SliderModule::SliderModule (const juce::String& labelText)
     if (!fillBarImageLoaded)
     {
         auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
-        auto fillBarFile = assetsPath.getChildFile ("SliderFill_spritesheet.png");
+        auto fillBarFile = assetsPath.getChildFile ("SliderFill_spritesheet_withthumb.png");
         
         if (fillBarFile.existsAsFile())
         {
@@ -60,6 +62,9 @@ SliderModule::SliderModule (const juce::String& labelText)
                      juce::String(fillBarImage.getHeight()) + 
                      " (" + juce::String(spritesheetTotalFrames) + " frames)");
                 fillBarImageLoaded = true;
+                
+                // Load color variants
+                loadColorVariants();
             }
         }
         else
@@ -108,6 +113,184 @@ void SliderModule::updateValueLabel()
         valueLabel.setText ("--", juce::dontSendNotification);
 }
 
+void SliderModule::loadColorVariants()
+{
+    if (colorVariantsLoaded)
+        return;
+    
+    auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
+    
+    // Check if cache files exist - if not, generate them first
+    bool cacheExists = true;
+    for (int i = 0; i < 10; ++i)
+    {
+        auto variantFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        if (!variantFile.existsAsFile())
+        {
+            cacheExists = false;
+            break;
+        }
+    }
+    
+    if (!cacheExists)
+    {
+        DBG ("Color variant cache not found - generating cache files...");
+        generateColorVariantCache();
+    }
+    
+    DBG ("Loading pre-cached color variants...");
+    
+    // Load each pre-cached color variant PNG file
+    for (int i = 0; i < 10; ++i)
+    {
+        auto variantFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        
+        if (variantFile.existsAsFile())
+        {
+            auto variantImage = juce::ImageCache::getFromFile (variantFile);
+            if (!variantImage.isNull())
+            {
+                colorVariants[i] = variantImage;
+            }
+            else
+            {
+                DBG ("Failed to load: " + variantFile.getFileName());
+            }
+        }
+        else
+        {
+            DBG ("Color variant not found: " + variantFile.getFileName());
+        }
+    }
+    
+    colorVariantsLoaded = true;
+    DBG ("Loaded " + juce::String (colorVariants.size()) + " pre-cached color variants");
+}
+
+void SliderModule::generateColorVariantCache()
+{
+    // Define the 10 specific colors from the palette
+    juce::Array<juce::Colour> paletteColors = {
+        juce::Colour (0xff3d3a5c), /* #3d3a5c */
+        juce::Colour (0xff2b5876), /* #2b5876 */
+        juce::Colour (0xff2a6f7f), /* #2a6f7f */
+        juce::Colour (0xff32987e), /* #32987e */
+        juce::Colour (0xff54c181), /* #54c181 */
+        juce::Colour (0xff70b861), /* #70b861 */
+        juce::Colour (0xff9cae4d), /* #9cae4d */
+        juce::Colour (0xffc1a03e), /* #c1a03e */
+        juce::Colour (0xffc78441), /* #c78441 */
+        juce::Colour (0xffb76d3a)  /* #b76d3a */
+    };
+    
+    // Ensure fill bar is loaded
+    if (fillBarImage.isNull())
+    {
+        auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
+        auto fillBarFile = assetsPath.getChildFile ("SliderFill_spritesheet_withthumb.png");
+        if (fillBarFile.existsAsFile())
+            fillBarImage = juce::ImageCache::getFromFile (fillBarFile);
+    }
+    
+    if (fillBarImage.isNull())
+    {
+        DBG ("ERROR: Cannot generate color variants - source image not found");
+        return;
+    }
+    
+    DBG ("Generating and saving color variant cache...");
+    
+    auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
+    
+    // Generate tinted variants for each palette color and save as PNG
+    for (int i = 0; i < paletteColors.size(); ++i)
+    {
+        auto colour = paletteColors[i];
+        
+        // Clone and tint the spritesheet
+        auto tintedImage = fillBarImage.createCopy();
+        
+        // Fast color multiplication using BitmapData
+        juce::Image::BitmapData bitmapData (tintedImage, juce::Image::BitmapData::readWrite);
+        
+        float tintR = colour.getFloatRed();
+        float tintG = colour.getFloatGreen();
+        float tintB = colour.getFloatBlue();
+        
+        for (int y = 0; y < bitmapData.height; ++y)
+        {
+            for (int x = 0; x < bitmapData.width; ++x)
+            {
+                auto pixel = bitmapData.getPixelColour (x, y);
+                auto tinted = juce::Colour::fromFloatRGBA (
+                    pixel.getFloatRed() * tintR,
+                    pixel.getFloatGreen() * tintG,
+                    pixel.getFloatBlue() * tintB,
+                    pixel.getFloatAlpha()
+                );
+                bitmapData.setPixelColour (x, y, tinted);
+            }
+        }
+        
+        // Save as PNG file
+        auto outputFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        juce::FileOutputStream outputStream (outputFile);
+        
+        if (outputStream.openedOk())
+        {
+            juce::PNGImageFormat pngFormat;
+            pngFormat.writeImageToStream (tintedImage, outputStream);
+            DBG ("Saved: " + outputFile.getFileName() + " (" + colour.toDisplayString(true) + ")");
+        }
+    }
+    
+    DBG ("Color variant cache generation complete!");
+}
+
+const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour)
+{
+    // Define the same 10 palette colors for comparison
+    static const juce::Array<juce::Colour> paletteColors = {
+        juce::Colour (0xff3d3a5c), /* #3d3a5c */
+        juce::Colour (0xff2b5876), /* #2b5876 */
+        juce::Colour (0xff2a6f7f), /* #2a6f7f */
+        juce::Colour (0xff32987e), /* #32987e */
+        juce::Colour (0xff54c181), /* #54c181 */
+        juce::Colour (0xff70b861), /* #70b861 */
+        juce::Colour (0xff9cae4d), /* #9cae4d */
+        juce::Colour (0xffc1a03e), /* #c1a03e */
+        juce::Colour (0xffc78441), /* #c78441 */
+        juce::Colour (0xffb76d3a)  /* #b76d3a */
+    };
+    
+    // Find the closest matching palette color
+    int closestIndex = 0;
+    float minDistance = std::numeric_limits<float>::max();
+    
+    for (int i = 0; i < paletteColors.size(); ++i)
+    {
+        // Simple color distance using RGB euclidean distance
+        float dr = colour.getFloatRed() - paletteColors[i].getFloatRed();
+        float dg = colour.getFloatGreen() - paletteColors[i].getFloatGreen();
+        float db = colour.getFloatBlue() - paletteColors[i].getFloatBlue();
+        float distance = dr*dr + dg*dg + db*db;
+        
+        if (distance < minDistance)
+        {
+            minDistance = distance;
+            closestIndex = i;
+        }
+    }
+    
+    // Look up the variant
+    auto it = colorVariants.find (closestIndex);
+    if (it != colorVariants.end())
+        return it->second;
+    
+    // Fallback to original grayscale if variant not found
+    return fillBarImage;
+}
+
 void SliderModule::paint (juce::Graphics& g)
 {
     // Draw fill bar behind the slider using spritesheet frames
@@ -116,19 +299,26 @@ void SliderModule::paint (juce::Graphics& g)
         // Get slider bounds
         auto sliderBounds = slider.getBounds();
         
-        // Calculate which frame to display based on slider value (0 = bottom, 1 = top)
-        float sliderValue = (float)slider.getValue();
+        // Calculate which frame to display based on slider value
+        double sliderValue = slider.getValue();
+        double minValue = slider.getMinimum();
+        double maxValue = slider.getMaximum();
+        
+        // Normalize value to 0-1 range (works for any slider range)
+        float normalizedValue = (float)((sliderValue - minValue) / (maxValue - minValue));
         
         // Safety check - clamp to valid range
-        if (!std::isfinite(sliderValue) || sliderValue < 0.0f || sliderValue > 1.0f)
+        if (!std::isfinite(normalizedValue))
             return;  // Skip drawing if value is invalid
+        
+        normalizedValue = juce::jlimit (0.0f, 1.0f, normalizedValue);
         
         // Calculate frame index (0 to 169)
         // Spritesheet is reversed: Frame 0 = full (value 1.0), Frame 169 = empty (value 0.0)
         // So we need to invert the index
         // Use roundToInt() instead of (int) cast for smoother frame selection
         int frameIndex = juce::jlimit (0, spritesheetTotalFrames - 1, 
-                                       juce::roundToInt ((1.0f - sliderValue) * (spritesheetTotalFrames - 1)));
+                                       juce::roundToInt ((1.0f - normalizedValue) * (spritesheetTotalFrames - 1)));
         
         // Calculate source Y position in the spritesheet
         // Frames are stacked vertically from top (frame 0) to bottom (frame 169)
@@ -141,10 +331,14 @@ void SliderModule::paint (juce::Graphics& g)
         // Enable high-quality resampling for smooth 4x downscaling
         g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
         
-        // Draw the current frame scaled down to match track dimensions
-        g.drawImage (fillBarImage,
+        // Get the pre-tinted variant for this slider's accent color (instant lookup!)
+        const auto& spritesheetToUse = getVariantForColor (accentColour);
+        
+        // Draw the pre-tinted spritesheet frame
+        g.drawImage (spritesheetToUse,
                     (int)fillX, (int)fillY, (int)trackWidth, (int)trackHeight,
-                    0, srcY, spritesheetFrameWidth, spritesheetFrameHeight);
+                    0, srcY, spritesheetFrameWidth, spritesheetFrameHeight,
+                    false);
     }
     
     // Draw debug border if enabled

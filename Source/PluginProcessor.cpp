@@ -157,13 +157,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout TapMatrixAudioProcessor::cre
         "dB"
     ));
     
-    // Debug/Testing: Hue control (0-360 degrees)
+    // Debug/Testing: Hue control (0-9 for 10 palette colors)
     layout.add (std::make_unique<juce::AudioParameterFloat> (
         "hue",
         "Hue",
-        juce::NormalisableRange<float> (0.0f, 360.0f, 1.0f),
-        180.0f,  // Default to cyan
-        "°"
+        juce::NormalisableRange<float> (0.0f, 9.0f, 1.0f),
+        4.0f,  // Default to middle color
+        ""
     ));
     
     // Global Reverb Type

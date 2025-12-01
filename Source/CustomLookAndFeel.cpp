@@ -112,18 +112,18 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         
         if (sliderThumbDrawable)
         {
-            // Clone and recolor the thumb SVG
+            // Clone and recolor the thumb SVG - make it transparent
             auto thumbCopy = sliderThumbDrawable->createCopy();
-            thumbCopy->replaceColour (juce::Colours::black, tintColour);
-            thumbCopy->replaceColour (juce::Colours::white, tintColour);
-            thumbCopy->replaceColour (juce::Colour (0xfff2f2f7), tintColour);
+            thumbCopy->replaceColour (juce::Colours::black, juce::Colours::transparentBlack);
+            thumbCopy->replaceColour (juce::Colours::white, juce::Colours::transparentBlack);
+            thumbCopy->replaceColour (juce::Colour (0xfff2f2f7), juce::Colours::transparentBlack);
             
             thumbCopy->drawWithin (g, thumbBounds, juce::RectanglePlacement::centred, 1.0f);
         }
         else
         {
-            // Fallback: draw a simple thumb with tint color
-            g.setColour (tintColour);
+            // Fallback: draw a simple transparent thumb
+            g.setColour (juce::Colours::transparentBlack);
             g.fillRoundedRectangle (thumbBounds, 2.0f);
         }
         
@@ -131,7 +131,17 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         auto value = slider.getValue();
         if (std::isfinite (value))
         {
-            g.setColour (SliderModule::valueTextColour);
+            // Get accent color from parent SliderModule to calculate contrasting text color
+            juce::Colour accentColour = juce::Colours::white;  // Default
+            juce::Colour textColour = juce::Colour (0xffcccccc);  // Default light grey
+            if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+            {
+                accentColour = sliderModule->getAccentColour();
+                textColour = sliderModule->getValueTextColour();
+            }
+            
+            // Use the fixed text color from SliderModule
+            g.setColour (textColour);
             g.setFont (juce::FontOptions (SliderModule::valueFontSize, juce::Font::bold));
             
             // Get the value suffix and decimal places from parent SliderModule (if available)
@@ -175,3 +185,5 @@ void CustomLookAndFeel::drawRotarySlider (juce::Graphics& g,
                                       rotaryStartAngle, rotaryEndAngle,
                                       slider);
 }
+
+

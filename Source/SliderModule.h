@@ -49,7 +49,6 @@ public:
     static constexpr float componentPaddingRight = 10.0f;        // Extra padding right of slider
     static constexpr float valueFontSize = 9.0f;                // Font size for value text in thumb
     static constexpr float labelFontSize = 10.0f;             // Font size for parameter name label
-    static inline const juce::Colour valueTextColour {0xff1a1a1a};  /* #1a1a1a */ // Dark text on light thumb
     static inline const juce::Colour labelTextColour {0xffaaaaaa};  /* #aaaaaaff */ // Gray label text below slider
     
     //==========================================================================
@@ -85,6 +84,12 @@ public:
     /** Get the current accent color */
     juce::Colour getAccentColour() const { return accentColour; }
     
+    /** Set a custom text color for the value display */
+    void setValueTextColour (juce::Colour colour) { valueTextColour = colour; }
+    
+    /** Get the current value text color */
+    juce::Colour getValueTextColour() const { return valueTextColour; }
+    
     /** Update the label text (useful when reassigning to different parameter) */
     void setLabelText (const juce::String& text);
     
@@ -102,6 +107,13 @@ public:
     
     /** Enable/disable debug border to visualize component bounds */
     void setShowDebugBorder (bool show) { showDebugBorder = show; repaint(); }
+    
+    /** 
+     * Set the interval between discrete steps (0 = continuous).
+     * For discrete sliders, set this to the step size.
+     * Example: For a 0-9 slider, use setInterval(1.0) to snap to integers.
+     */
+    void setInterval (double interval) { slider.setRange (slider.getMinimum(), slider.getMaximum(), interval); }
     
     //==========================================================================
     // ACCESSORS
@@ -146,6 +158,7 @@ private:
     juce::String valueSuffix;           // Unit suffix for value display (e.g., "dB", "ms", "%")
     int valueDecimalPlaces = 1;         // Decimal precision for value display (default: 2)
     juce::Colour accentColour {0xffffffff};  /* #ffffff */ // Custom accent color (white default)
+    juce::Colour valueTextColour {0xffcccccc};  /* #cccccc */ // Custom text color (light grey default)
     bool showDebugBorder = false;       // Show debug border around component bounds
     
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
@@ -154,10 +167,18 @@ private:
     static juce::Image fillBarImage;
     static bool fillBarImageLoaded;
     
+    // Pre-generated color variants (key = hue degree 0-360)
+    static std::map<int, juce::Image> colorVariants;
+    static bool colorVariantsLoaded;
+    
     //==========================================================================
     // HELPER METHODS
     //==========================================================================
     void updateValueLabel();  // Update value label (currently unused)
+    
+    static void loadColorVariants();  // Load all pre-cached color variants from disk
+    static void generateColorVariantCache();  // Generate and save color variants (call once when colors change)
+    static const juce::Image& getVariantForColor (const juce::Colour& colour);  // Get nearest variant
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SliderModule)
 };
