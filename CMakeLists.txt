@@ -46,6 +46,8 @@ target_sources(TapMatrix
         Source/PluginEditor.cpp
         Source/CustomLookAndFeel.cpp
         Source/SliderModule.cpp
+        Source/SurroundStageView.cpp
+        Source/ViewPresetSelector.cpp
 )
 
 # Link JUCE modules
@@ -54,6 +56,7 @@ target_link_libraries(TapMatrix
         juce::juce_audio_utils
         juce::juce_audio_plugin_client
         juce::juce_dsp
+        juce::juce_opengl
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags

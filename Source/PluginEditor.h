@@ -5,6 +5,8 @@
 #include "PluginProcessor.h"
 #include "CustomLookAndFeel.h"
 #include "SliderModule.h"
+#include "SurroundStageView.h"
+#include "ViewPresetSelector.h"
 #include <memory>
 
 //==============================================================================
@@ -13,7 +15,8 @@
  * 
  * Ready for custom UI implementation
  */
-class TapMatrixAudioProcessorEditor : public juce::AudioProcessorEditor
+class TapMatrixAudioProcessorEditor : public juce::AudioProcessorEditor,
+                                       public juce::Timer
 {
 public:
     TapMatrixAudioProcessorEditor (TapMatrixAudioProcessor&);
@@ -21,6 +24,9 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    
+    // Timer callback to sync view preset state
+    void timerCallback() override;
 
 private:
     // Reference to processor
@@ -35,6 +41,15 @@ private:
     // Slider modules
     SliderModule mixSlider {"MIX"};
     SliderModule hueSlider {"HUE"};
+    
+    // 3D Surround Stage View
+    SurroundStageView surroundStageView;
+    
+    // View preset selector (segmented control)
+    ViewPresetSelector viewPresetSelector;
+    
+    void setupViewPresetSelector();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapMatrixAudioProcessorEditor)
 };
+

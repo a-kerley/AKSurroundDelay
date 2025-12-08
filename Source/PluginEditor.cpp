@@ -9,6 +9,12 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Set custom LookAndFeel
     setLookAndFeel (&customLookAndFeel);
     
+    // Setup 3D Surround Stage View
+    addAndMakeVisible (surroundStageView);
+    
+    // Setup view preset selector
+    setupViewPresetSelector();
+    
     // Setup mix slider
     mixSlider.getSlider().setLookAndFeel (&customLookAndFeel);
     mixSlider.attachToParameter (p.getParameters(), "mix");
@@ -26,12 +32,16 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Initialize slider colors based on default hue value
     updateSliderColors();
     
-    // Set plugin window size (1100 × 700)
-    setSize (1100, 700);
+    // Start timer to sync view preset state (30 FPS is enough for UI sync)
+    startTimerHz (30);
+    
+    // Set plugin window size (600 viewport + 200 controls + padding)
+    setSize (820, 600);
 }
 
 TapMatrixAudioProcessorEditor::~TapMatrixAudioProcessorEditor()
 {
+    stopTimer();
     setLookAndFeel (nullptr);
 }
 
@@ -51,19 +61,53 @@ void TapMatrixAudioProcessorEditor::paint (juce::Graphics& g)
 void TapMatrixAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
+    const int padding = 20;
+    const int viewportSize = 500;
+    const int selectorHeight = 28;
+    const int selectorWidth = 320;
     
-    // Center the sliders
-    int centerX = bounds.getCentreX();
-    int centerY = bounds.getCentreY();
+    // Left side: 3D viewport (500x500) with padding
+    auto viewportArea = bounds.removeFromLeft (viewportSize + padding * 2);
+    viewportArea.reduce (padding, padding);
     
-    // Use SliderModule's ideal size calculations
+    // Position viewport
+    surroundStageView.setBounds (viewportArea.removeFromTop (viewportSize));
+    
+    // View preset selector below viewport (centered)
+    viewportArea.removeFromTop (10); // spacing
+    auto selectorArea = viewportArea.removeFromTop (selectorHeight);
+    selectorArea = selectorArea.withSizeKeepingCentre (selectorWidth, selectorHeight);
+    viewPresetSelector.setBounds (selectorArea);
+    
+    // Right side: sliders
+    auto controlsArea = bounds;
+    controlsArea.reduce (padding, padding);
+    
     int sliderWidth = SliderModule::getIdealWidth();
     int sliderHeight = SliderModule::getIdealHeight();
+    int centerY = controlsArea.getCentreY();
+    int sliderX = controlsArea.getCentreX() - sliderWidth / 2;
     
-    // Position sliders side by side at their ideal sizes
-    // Mix slider on left, Hue slider on right
-    mixSlider.setBounds (centerX - 100, centerY - sliderHeight/2, sliderWidth, sliderHeight);
-    hueSlider.setBounds (centerX + 20, centerY - sliderHeight/2, sliderWidth, sliderHeight);
+    // Stack sliders vertically on right side
+    mixSlider.setBounds (sliderX - 40, centerY - sliderHeight - 10, sliderWidth, sliderHeight);
+    hueSlider.setBounds (sliderX + 40, centerY - sliderHeight - 10, sliderWidth, sliderHeight);
+}
+
+void TapMatrixAudioProcessorEditor::setupViewPresetSelector()
+{
+    viewPresetSelector.onPresetSelected = [this](SurroundStageView::ViewPreset preset)
+    {
+        surroundStageView.setViewPreset (preset);
+    };
+    
+    addAndMakeVisible (viewPresetSelector);
+}
+
+void TapMatrixAudioProcessorEditor::timerCallback()
+{
+    // Sync the selector with the SurroundStageView's current preset
+    auto currentPreset = surroundStageView.getCurrentPreset();
+    viewPresetSelector.setCurrentPreset (currentPreset);
 }
 
 void TapMatrixAudioProcessorEditor::updateSliderColors()

@@ -109,6 +109,138 @@ static inline const juce::Colour labelTextColour {0xffaaaaaa};
 - Smart value formatting: 0-1 range shows decimals, larger values show integers
 - Constrains thumb travel with `jlimit()` to prevent overflow (2px padding)
 
+## UI Style Guide
+
+### Design Philosophy
+- **Dark, minimal aesthetic** - clean and unobtrusive
+- **Consistent greyscale palette** - color used sparingly for accents and state
+- **Subtle depth** - semi-transparent layers, no harsh shadows
+- **Smooth animations** - ease-out transitions for all state changes
+
+### Color Palette
+
+#### Background Colors
+```cpp
+static inline const juce::Colour backgroundDark {0xff1a1a1a};      /* #1a1a1a - Main plugin background */
+static inline const juce::Colour backgroundMid {0xff2a2a2a};       /* #2a2a2a - Control backgrounds */
+static inline const juce::Colour backgroundLight {0xff3a3a3a};     /* #3a3a3a - Dimmed/inactive elements */
+```
+
+#### Border & Stroke Colors
+```cpp
+static inline const juce::Colour borderColour {0xff4a4a4a};        /* #4a4a4a - Control borders */
+static inline const juce::Colour borderSubtle {0xff3a3a3a};        /* #3a3a3a - Subtle separators */
+```
+
+#### Interactive Element Colors
+```cpp
+static inline const juce::Colour pillColour {0xff5a5a5a};          /* #5a5a5a - Selected/active pill */
+static inline const juce::Colour pillDimmedColour {0xff3a3a3a};    /* #3a3a3a - Custom/inactive state */
+```
+
+#### Text Colors
+```cpp
+static inline const juce::Colour textPrimary {0xffffffff};         /* #ffffff - Primary text, active labels */
+static inline const juce::Colour textSecondary {0xffaaaaaa};       /* #aaaaaa - Secondary text, labels */
+static inline const juce::Colour textDimmed {0xff888888};          /* #888888 - Inactive/dimmed text */
+static inline const juce::Colour textOnAccent {0xff1a1a1a};        /* #1a1a1a - Text on bright backgrounds */
+```
+
+#### 3D Viewport Colors
+```cpp
+static inline const juce::Colour viewport3DBackground {0xff1a1a1a}; /* #1a1a1a - 3D scene background */
+static inline const juce::Colour roomWallsColour {0xff151515};      /* #151515 @ 60% alpha - Semi-transparent walls */
+static inline const juce::Colour roomEdgesColour {0xffffffff};      /* #ffffff - Wireframe edges */
+static inline const juce::Colour gridColour {0xff666666};           /* #666666 - Floor grid */
+static inline const juce::Colour sphereColour {0xff808080};         /* #808080 - Listener/tap markers */
+```
+
+### Typography
+
+#### Font Sizes
+```cpp
+static constexpr float fontSizeSmall = 9.0f;    // Value displays, fine detail
+static constexpr float fontSizeMedium = 10.0f;  // Labels, secondary text
+static constexpr float fontSizeLarge = 12.0f;   // Headings, primary controls
+```
+
+#### Font Weights
+- **Bold** for control labels (ANGLE, LEFT, TOP, etc.)
+- **Regular** for values and secondary information
+
+### Corner Radii & Borders
+
+#### Standard Values
+```cpp
+static constexpr float cornerRadiusSmall = 3.0f;   // Small buttons, tags
+static constexpr float cornerRadiusMedium = 5.0f;  // Segmented controls, panels
+static constexpr float cornerRadiusLarge = 8.0f;   // Large containers, modals
+
+static constexpr float borderWidthThin = 1.0f;     // Standard control borders
+static constexpr float borderWidthMedium = 1.5f;   // Emphasis borders
+```
+
+### Segmented Control Style (ViewPresetSelector)
+```cpp
+static constexpr float cornerRadius = 5.0f;        // Outer container
+static constexpr float borderWidth = 1.0f;         // Container border
+static constexpr float pillPadding = 2.0f;         // Padding between pill and container edge
+static constexpr float animationSpeed = 0.15f;     // 0-1 per frame, ease-out
+
+// States
+// - Active: pillColour (#5a5a5a), textPrimary (#ffffff)
+// - Dimmed (custom): pillDimmedColour (#3a3a3a), textDimmed (#888888)
+```
+
+### Animation Guidelines
+
+#### Timing
+```cpp
+static constexpr float animationSpeedFast = 0.15f;   // Quick transitions (pill slide)
+static constexpr float animationSpeedMedium = 0.08f; // Standard transitions (view rotation)
+static constexpr float animationSpeedSlow = 0.05f;   // Slow, deliberate transitions
+```
+
+#### Easing
+- **Ease-out** for most UI animations: `value += (target - value) * speed`
+- **Linear** for continuous rotations or loops
+- **60 FPS** timer for smooth animations
+
+### State Indication
+
+#### Active/Selected
+- Full brightness text (textPrimary)
+- Visible pill/highlight background (pillColour)
+
+#### Inactive/Unselected  
+- Dimmed text (textDimmed or textSecondary)
+- No highlight background
+
+#### Custom/Modified State
+- Dimmed pill (pillDimmedColour)
+- Dimmed text across all options
+- Indicates user has customized beyond presets
+
+### OpenGL 3D Viewport Style
+
+#### Room Visualization
+- **Walls**: Semi-transparent filled triangles for depth testing
+- **Edges**: White wireframe (1.5px line width)
+- **Floor grid**: 4×4 divisions, subtle grey
+- **No floor fill** - grid only for visibility
+
+#### Objects (Spheres/Markers)
+- Solid filled geometry (triangles, not wireframe)
+- Grey tones (0.35-0.5 brightness)
+- Proper depth testing against room walls
+
+#### Camera Defaults
+```cpp
+static constexpr float defaultAzimuth = 225.0f;    // Back-left isometric view
+static constexpr float defaultElevation = 30.0f;   // Slight overhead
+static constexpr float defaultZoom = 4.5f;         // Comfortable framing
+```
+
 ## Build Instructions
 
 ### VS Code Method (Preferred)
