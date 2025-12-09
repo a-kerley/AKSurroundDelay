@@ -8,7 +8,9 @@
 #include "SurroundStageView.h"
 #include "ViewPresetSelector.h"
 #include "ResizeHandle.h"
+#include "TapPanel.h"
 #include <memory>
+#include <array>
 
 //==============================================================================
 /**
@@ -44,22 +46,18 @@ private:
     // Reference to processor
     TapMatrixAudioProcessor& audioProcessor;
     
-    // Update slider colors based on hue parameter
-    void updateSliderColors();
-    
     // Custom LookAndFeel
     CustomLookAndFeel customLookAndFeel;
     
-    // Slider modules - one of each style for testing
-    SliderModule slider_38x170 {"38x170", FaderStyle::Fader_38x170};
-    SliderModule slider_22x170 {"22x170", FaderStyle::Fader_22x170};
-    SliderModule slider_32x129 {"32x129", FaderStyle::Fader_32x129};
-    SliderModule slider_32x129FB {"32x129FB", FaderStyle::Fader_32x129_FrontBack};
-    SliderModule slider_22x79 {"22x79", FaderStyle::Fader_22x79};
-    SliderModule slider_28x84H {"28x84H", FaderStyle::Fader_28x84_HorizontalLeftRight};
+    // Number of taps
+    static constexpr int NUM_TAPS = 8;
     
-    // Hue slider for color testing
-    SliderModule hueSlider {"HUE", FaderStyle::Fader_38x170};
+    // Tap tab bar (selects which tap panel is visible)
+    TapTabBar tapTabBar;
+    
+    // All 8 tap panels (only one visible at a time)
+    std::array<std::unique_ptr<TapPanel>, NUM_TAPS> tapPanels;
+    int currentTapIndex = 0;
     
     // 3D Surround Stage View
     SurroundStageView surroundStageView;
@@ -73,6 +71,8 @@ private:
     // Current UI scale factor (1.0 to 3.0)
     float currentScaleFactor = 1.0f;
     
+    void setupTapPanels();
+    void showTapPanel (int index);
     void setupViewPresetSelector();
     void setupResizeHandle();
     void updateAllComponentScales();  // Update scale factor on all child components

@@ -305,7 +305,7 @@ SliderModule::SliderModule (const juce::String& labelText, FaderStyle style)
     {
         nameLabel.setText (labelText, juce::dontSendNotification);
         nameLabel.setFont (juce::FontOptions (labelFontSize()));  // Use scaled font size
-        nameLabel.setJustificationType (juce::Justification::centred);  // Center horizontally and vertically
+        nameLabel.setJustificationType (labelJustification);  // Use member variable (default: centred)
         nameLabel.setColour (juce::Label::textColourId, labelTextColour);
         nameLabel.setMinimumHorizontalScale (1.0f);  // Never squash text - let it overflow if needed
         nameLabel.setInterceptsMouseClicks (false, false);  // Allow clicks to pass through
@@ -370,14 +370,35 @@ void SliderModule::setLabelText (const juce::AttributedString& attributedText)
     repaint();
 }
 
+void SliderModule::setLabelFontSize (float size)
+{
+    customLabelFontSize = size;
+    
+    // Update the label font if using standard label
+    if (!useAttributedLabel)
+    {
+        nameLabel.setFont (juce::FontOptions (labelFontSize()));
+    }
+    
+    resized();
+}
+
+void SliderModule::setLabelJustification (juce::Justification justification)
+{
+    labelJustification = justification;
+    nameLabel.setJustificationType (justification);
+    repaint();
+}
+
 void SliderModule::setUsePanDisplay (bool usePan)
 {
-    usePanDisplay = usePan;
-    
-    // For horizontal pan sliders, we need to handle the slider direction
-    // The default horizontal slider has left=min, right=max which is correct for L/R pan
-    // where negative values = Left, positive values = Right
-    // No inversion needed - the spritesheet animation handles the visual
+    // Legacy method - now redirects to ValueDisplayMode
+    valueDisplayMode = usePan ? ValueDisplayMode::PanLeftRight : ValueDisplayMode::Standard;
+}
+
+void SliderModule::setValueDisplayMode (ValueDisplayMode mode)
+{
+    valueDisplayMode = mode;
 }
 
 void SliderModule::loadFillBarForStyle()
@@ -558,13 +579,10 @@ void SliderModule::paint (juce::Graphics& g)
     // Get slider bounds
     auto sliderBounds = slider.getBounds();
     
-    // Calculate which frame to display based on slider value
+    // Calculate which frame to display based on slider's proportional position
+    // Using valueToProportionOfLength() correctly handles skewed/non-linear ranges
     double sliderValue = slider.getValue();
-    double minValue = slider.getMinimum();
-    double maxValue = slider.getMaximum();
-    
-    // Normalize value to 0-1 range (works for any slider range)
-    float normalizedValue = (float)((sliderValue - minValue) / (maxValue - minValue));
+    float normalizedValue = (float) slider.valueToProportionOfLength (sliderValue);
     
     // Safety check - clamp to valid range
     if (!std::isfinite(normalizedValue))
@@ -605,6 +623,9 @@ void SliderModule::paint (juce::Graphics& g)
     // Get the pre-tinted variant for this slider's accent color (instant lookup!)
     const auto& spritesheetToUse = getVariantForColor (accentColour);
     
+    // Apply inactive alpha if slider is disabled
+    float drawAlpha = sliderEnabled ? 1.0f : ColorPalette::inactiveFillBarAlpha;
+    
     // Draw the pre-tinted spritesheet frame
     // For horizontal sliders: display width = trackHeight (travel), display height = trackWidth (short)
     // For vertical sliders: display width = trackWidth, display height = trackHeight
@@ -612,18 +633,22 @@ void SliderModule::paint (juce::Graphics& g)
     {
         // Horizontal slider: trackHeight is the travel dimension (84), trackWidth is short dimension (28)
         // Display as: 84 wide × 28 tall
+        g.setOpacity (drawAlpha);
         g.drawImage (spritesheetToUse,
                     (int)fillX, (int)fillY, (int)styleInfo.trackHeight, (int)styleInfo.trackWidth,
                     0, srcY, styleInfo.spritesheetFrameWidth, styleInfo.spritesheetFrameHeight,
                     false);
+        g.setOpacity (1.0f);  // Reset opacity
     }
     else
     {
         // Vertical slider: normal orientation
+        g.setOpacity (drawAlpha);
         g.drawImage (spritesheetToUse,
                     (int)fillX, (int)fillY, (int)styleInfo.trackWidth, (int)styleInfo.trackHeight,
                     0, srcY, styleInfo.spritesheetFrameWidth, styleInfo.spritesheetFrameHeight,
                     false);
+        g.setOpacity (1.0f);  // Reset opacity
     }
     
     // Draw debug border if enabled
@@ -720,6 +745,10 @@ void SliderModule::handleResetToDefault()
 
 void SliderModule::mouseDoubleClick (const juce::MouseEvent& event)
 {
+    // Ignore double-click if slider is disabled
+    if (!sliderEnabled)
+        return;
+    
     // Double-click anywhere on the slider module opens text editor for manual value entry
     if (!event.mods.isCommandDown())
     {
@@ -846,12 +875,25 @@ void SliderModule::showTextEditor()
     valueTextEditor->setBounds ((int)editorX, (int)editorY, (int)editorWidth, (int)editorHeight);
     
     // Set the current value as text (without suffix for easier editing)
+    // For parameters with small ranges (like -1 to 1), always show decimal places
+    // so the user can edit the actual value accurately
     juce::String valueText;
+    double range = slider.getMaximum() - slider.getMinimum();
     
-    if (valueDecimalPlaces == 0 || std::abs(value) >= 100.0)
-        valueText = juce::String ((int)value);
+    if (range <= 2.0)
+    {
+        // Small range parameters (e.g., -1 to 1): always show 2 decimal places for precision
+        valueText = juce::String (value, 2);
+    }
+    else if (std::abs(value) >= 100.0 || valueDecimalPlaces == 0)
+    {
+        // Large values or integer display mode
+        valueText = juce::String ((int)std::round(value));
+    }
     else
+    {
         valueText = juce::String (value, valueDecimalPlaces);
+    }
     
     valueTextEditor->setText (valueText, false);
     valueTextEditor->setVisible (true);
@@ -903,4 +945,33 @@ void SliderModule::textEditorFocusLost()
 {
     // Commit value when focus is lost (clicking elsewhere)
     hideTextEditor (true);
+}
+
+//==============================================================================
+// ENABLED/DISABLED STATE
+//==============================================================================
+void SliderModule::setSliderEnabled (bool enabled)
+{
+    if (sliderEnabled == enabled)
+        return;
+    
+    sliderEnabled = enabled;
+    
+    // Enable/disable mouse interaction on the slider
+    slider.setEnabled (enabled);
+    slider.setInterceptsMouseClicks (enabled, enabled);
+    
+    // Update visual appearance
+    if (enabled)
+    {
+        // Restore normal label color
+        nameLabel.setColour (juce::Label::textColourId, labelTextColour);
+    }
+    else
+    {
+        // Use inactive label color
+        nameLabel.setColour (juce::Label::textColourId, ColorPalette::inactiveLabelColour);
+    }
+    
+    repaint();
 }

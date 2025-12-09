@@ -1,4 +1,5 @@
 #include "SurroundStageView.h"
+#include "ColorPalette.h"
 #include <cmath>
 
 //==============================================================================
@@ -91,8 +92,11 @@ void SurroundStageView::newOpenGLContextCreated()
 
 void SurroundStageView::renderOpenGL()
 {
-    // Clear with dark background
-    juce::gl::glClearColor (0.1f, 0.1f, 0.1f, 1.0f);
+    // Clear with viewport background color
+    juce::gl::glClearColor (ColorPalette::viewport3DBackground.r, 
+                            ColorPalette::viewport3DBackground.g, 
+                            ColorPalette::viewport3DBackground.b, 
+                            ColorPalette::viewport3DBackground.a);
     juce::gl::glClear (juce::gl::GL_COLOR_BUFFER_BIT | juce::gl::GL_DEPTH_BUFFER_BIT);
     
     if (shaderProgram == nullptr || attribPosition < 0)
@@ -130,7 +134,9 @@ void SurroundStageView::renderOpenGL()
     //==========================================================================
     // Draw room wall faces (semi-transparent dark grey)
     if (uniformColor >= 0)
-        juce::gl::glUniform4f (uniformColor, 0.15f, 0.15f, 0.15f, 0.6f);
+        juce::gl::glUniform4f (uniformColor, ColorPalette::roomWallsColour.r, 
+                               ColorPalette::roomWallsColour.g, ColorPalette::roomWallsColour.b, 
+                               ColorPalette::roomWallsColour.a);
     
     if (roomWallsVBO != 0)
     {
@@ -143,7 +149,9 @@ void SurroundStageView::renderOpenGL()
     //==========================================================================
     // Draw floor grid (darker grey)
     if (uniformColor >= 0)
-        juce::gl::glUniform4f (uniformColor, 0.4f, 0.4f, 0.4f, 1.0f);
+        juce::gl::glUniform4f (uniformColor, ColorPalette::gridColour.r, 
+                               ColorPalette::gridColour.g, ColorPalette::gridColour.b, 
+                               ColorPalette::gridColour.a);
     
     if (gridVBO != 0)
     {
@@ -156,7 +164,9 @@ void SurroundStageView::renderOpenGL()
     //==========================================================================
     // Draw listener sphere (dark grey solid)
     if (uniformColor >= 0)
-        juce::gl::glUniform4f (uniformColor, 0.5f, 0.5f, 0.5f, 1.0f);
+        juce::gl::glUniform4f (uniformColor, ColorPalette::sphereColour.r, 
+                               ColorPalette::sphereColour.g, ColorPalette::sphereColour.b, 
+                               ColorPalette::sphereColour.a);
     
     if (sphereVBO != 0)
     {
@@ -169,7 +179,9 @@ void SurroundStageView::renderOpenGL()
     //==========================================================================
     // Draw room wireframe edges (white, on top of walls)
     if (uniformColor >= 0)
-        juce::gl::glUniform4f (uniformColor, 1.0f, 1.0f, 1.0f, 1.0f);
+        juce::gl::glUniform4f (uniformColor, ColorPalette::roomEdgesColour.r, 
+                               ColorPalette::roomEdgesColour.g, ColorPalette::roomEdgesColour.b, 
+                               ColorPalette::roomEdgesColour.a);
     
     if (roomEdgesVBO != 0)
     {

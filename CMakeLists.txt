@@ -48,6 +48,8 @@ target_sources(TapMatrix
         Source/SliderModule.cpp
         Source/SurroundStageView.cpp
         Source/ViewPresetSelector.cpp
+        Source/TapPanel.cpp
+        Source/PositionControlGroup.cpp
 )
 
 # Link JUCE modules

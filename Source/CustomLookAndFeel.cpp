@@ -1,5 +1,6 @@
 #include "CustomLookAndFeel.h"
 #include "SliderModule.h"
+#include "ColorPalette.h"
 
 CustomLookAndFeel::CustomLookAndFeel()
 {
@@ -59,6 +60,7 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
     float thumbInset = 6.5f;    // Default inset
     float trackYOffset = 0.0f;  // Default: no offset
     bool isHorizontal = false;
+    bool isEnabled = true;      // Default: enabled
     
     if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
     {
@@ -72,6 +74,11 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         thumbInset = info.thumbInset;
         trackYOffset = info.trackYOffset;
         isHorizontal = info.isHorizontal;
+        isEnabled = sliderModule->isSliderEnabled();
+        
+        // When disabled, use a greyed-out tint for the track
+        if (!isEnabled)
+            tintColour = ColorPalette::inactiveLabelColour;
     }
     
     // Ensure SVGs are loaded for this style
@@ -112,11 +119,11 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
         if (std::isfinite (value))
         {
             juce::Colour textColour = juce::Colour (0xffcccccc);
-            bool usePanDisplay = false;
+            ValueDisplayMode displayMode = ValueDisplayMode::Standard;
             if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
             {
                 textColour = sliderModule->getValueTextColour();
-                usePanDisplay = sliderModule->getUsePanDisplay();
+                displayMode = sliderModule->getValueDisplayMode();
             }
             
             g.setColour (textColour);
@@ -141,7 +148,7 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
             float thumbCenterX = travelLeft + (normalizedValue * travelRange);         // Center of text
             float thumbX = thumbCenterX - halfThumb + trackYOffset;                    // Top-left, with X offset
             
-            if (usePanDisplay)
+            if (displayMode == ValueDisplayMode::PanLeftRight)
             {
                 // Pan display mode: "L" or "R" above, value below - tighter spacing
                 // Value is -1 to +1, display as L99 to R99
@@ -149,7 +156,7 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
                 bool isCenter = std::abs(value) < 0.005f;
                 bool isLeft = value < -0.005f;
                 juce::String dirLabel = isLeft ? "L" : (isCenter ? "C" : "R");
-                int panValue = (int)std::round (std::abs (value) * 99.0f);
+                int panValue = (int)std::round (std::abs (value) * 100.0f);
                 juce::String valueText = isCenter ? "" : juce::String (panValue);
                 
                 // For center position, use full track width for centering the "C"
@@ -241,19 +248,41 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
             juce::Colour textColour = juce::Colour (0xffcccccc); /* #cccccc */
             juce::String suffix;
             int decimalPlaces = 2;
+            ValueDisplayMode displayMode = ValueDisplayMode::Standard;
             if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
             {
                 textColour = sliderModule->getValueTextColour();
                 suffix = sliderModule->getValueSuffix();
                 decimalPlaces = sliderModule->getDecimalPlaces();
+                displayMode = sliderModule->getValueDisplayMode();
             }
             
-            // Format value text
+            // Format value text based on display mode
             juce::String valueText;
-            if (value <= 1.0f && value >= -1.0f)
-                valueText = juce::String (value, decimalPlaces) + suffix;
+            if (displayMode == ValueDisplayMode::FrontBack)
+            {
+                // Front/Back mode: F100 at top (value=1), B100 at bottom (value=-1), C in middle
+                // Value is -1 to +1
+                bool isCenter = std::abs(value) < 0.005f;
+                bool isFront = value > 0.005f;
+                juce::String dirLabel = isFront ? "F" : (isCenter ? "C" : "B");
+                int fbValue = (int)std::round (std::abs (value) * 100.0f);
+                valueText = isCenter ? "C" : dirLabel + juce::String (fbValue);
+            }
+            else if (displayMode == ValueDisplayMode::Percent)
+            {
+                // Percent mode: 0% at bottom (value=0), 100% at top (value=1)
+                int percentValue = (int)std::round (value * 100.0f);
+                valueText = juce::String (percentValue) + "%";
+            }
             else
-                valueText = juce::String ((int)value) + suffix;
+            {
+                // Standard mode
+                if (value <= 1.0f && value >= -1.0f)
+                    valueText = juce::String (value, decimalPlaces) + suffix;
+                else
+                    valueText = juce::String ((int)value) + suffix;
+            }
             
             // Get per-style font size from SliderModule (already scaled)
             float valueFontSize = SliderModule::baseValueFontSize * scaleFactor;  // Default

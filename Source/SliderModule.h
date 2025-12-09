@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "ColorPalette.h"
 
 //==============================================================================
 // Forward declaration
@@ -48,6 +49,20 @@ enum class FaderStyle
     Fader_28x84_HorizontalLeftRight, // Horizontal fader - 28px tall, 84px wide (travel direction)
     Fader_22x170,                    // Slim vertical fader - 22px wide, 170px tall
     Fader_22x79                      // Small vertical fader - 22px wide, 79px tall
+};
+
+//==============================================================================
+/**
+ * VALUE DISPLAY MODE ENUMERATION
+ * 
+ * Controls how the value is formatted and displayed on the slider.
+ */
+enum class ValueDisplayMode
+{
+    Standard,      // Standard numeric display with optional suffix (e.g., "50%", "100ms")
+    PanLeftRight,  // Left/Right pan: L100 to C to R100 (center = 0)
+    FrontBack,     // Front/Back position: F100 (top) to C to B100 (bottom)
+    Percent        // Simple 0-100% display (no direction labels)
 };
 
 //==============================================================================
@@ -196,16 +211,41 @@ public:
     static constexpr float baseComponentPaddingBottom = 4.0f;  // Space below label (unscaled)
     static constexpr float baseComponentPaddingLeft = 8.0f;    // Space left of track (unscaled)
     static constexpr float baseComponentPaddingRight = 8.0f;   // Space right of track (unscaled)
-    static constexpr float baseLabelSpacing = 4.0f;            // Gap between track and label (unscaled)
+    static constexpr float baseLabelSpacing = 7.0f;            // Gap between track and label (unscaled)
     static constexpr float baseLabelHeight = 14.0f;            // Height for parameter name label (unscaled)
     
     // Scaled accessors (use these for layout)
-    float componentPaddingTop() const { return baseComponentPaddingTop * currentScaleFactor; }
-    float componentPaddingBottom() const { return baseComponentPaddingBottom * currentScaleFactor; }
-    float componentPaddingLeft() const { return baseComponentPaddingLeft * currentScaleFactor; }
-    float componentPaddingRight() const { return baseComponentPaddingRight * currentScaleFactor; }
-    float labelSpacing() const { return baseLabelSpacing * currentScaleFactor; }
-    float labelHeight() const { return baseLabelHeight * currentScaleFactor; }
+    // These check for per-instance overrides first, then fall back to base constants
+    float componentPaddingTop() const 
+    { 
+        float base = (customPaddingTop >= 0.0f) ? customPaddingTop : baseComponentPaddingTop;
+        return base * currentScaleFactor; 
+    }
+    float componentPaddingBottom() const 
+    { 
+        float base = (customPaddingBottom >= 0.0f) ? customPaddingBottom : baseComponentPaddingBottom;
+        return base * currentScaleFactor; 
+    }
+    float componentPaddingLeft() const 
+    { 
+        float base = (customPaddingLeft >= 0.0f) ? customPaddingLeft : baseComponentPaddingLeft;
+        return base * currentScaleFactor; 
+    }
+    float componentPaddingRight() const 
+    { 
+        float base = (customPaddingRight >= 0.0f) ? customPaddingRight : baseComponentPaddingRight;
+        return base * currentScaleFactor; 
+    }
+    float labelSpacing() const 
+    { 
+        float base = (customLabelSpacing >= 0.0f) ? customLabelSpacing : baseLabelSpacing;
+        return base * currentScaleFactor; 
+    }
+    float labelHeight() const 
+    { 
+        float base = (customLabelHeight >= 0.0f) ? customLabelHeight : baseLabelHeight;
+        return base * currentScaleFactor; 
+    }
     
     //==========================================================================
     // TEXT STYLING (scaled by scaleFactor)
@@ -215,7 +255,81 @@ public:
     
     // Per-style value font size from styleInfo (already scaled), falls back to default
     float valueFontSize() const { return styleInfo.valueLabelFontSize; }
-    float labelFontSize() const { return baseLabelFontSize * currentScaleFactor; }
+    float labelFontSize() const 
+    { 
+        float base = (customLabelFontSize >= 0.0f) ? customLabelFontSize : baseLabelFontSize;
+        return base * currentScaleFactor; 
+    }
+    
+    /** 
+     * Set custom label spacing (gap between track and label) for this instance.
+     * Pass -1.0f to reset to default (baseLabelSpacing).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setLabelSpacing (float spacing) { customLabelSpacing = spacing; resized(); }
+    
+    /** 
+     * Set custom label font size for this instance.
+     * Pass -1.0f to reset to default (baseLabelFontSize).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setLabelFontSize (float size);
+    
+    /** 
+     * Set custom padding above the track for this instance.
+     * Pass -1.0f to reset to default (baseComponentPaddingTop).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setPaddingTop (float padding) { customPaddingTop = padding; resized(); }
+    
+    /** 
+     * Set custom padding below the label for this instance.
+     * Pass -1.0f to reset to default (baseComponentPaddingBottom).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setPaddingBottom (float padding) { customPaddingBottom = padding; resized(); }
+    
+    /** 
+     * Set custom padding left of the track for this instance.
+     * Pass -1.0f to reset to default (baseComponentPaddingLeft).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setPaddingLeft (float padding) { customPaddingLeft = padding; resized(); }
+    
+    /** 
+     * Set custom padding right of the track for this instance.
+     * Pass -1.0f to reset to default (baseComponentPaddingRight).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setPaddingRight (float padding) { customPaddingRight = padding; resized(); }
+    
+    /** 
+     * Set custom label height for this instance.
+     * Pass -1.0f to reset to default (baseLabelHeight).
+     * Value is unscaled - will be multiplied by scale factor.
+     */
+    void setLabelHeight (float height) { customLabelHeight = height; resized(); }
+    
+    /** 
+     * Set the label text justification.
+     * Default is centred. Use centredTop to align text to top of label area.
+     */
+    void setLabelJustification (juce::Justification justification);
+    
+    /** Get the custom label spacing (-1.0f if using default) */
+    float getCustomLabelSpacing() const { return customLabelSpacing; }
+    
+    /** Get the custom label font size (-1.0f if using default) */
+    float getCustomLabelFontSize() const { return customLabelFontSize; }
+    
+    /** Get the custom label height (-1.0f if using default) */
+    float getCustomLabelHeight() const { return customLabelHeight; }
+    
+    /** Get the custom padding values (-1.0f if using default) */
+    float getCustomPaddingTop() const { return customPaddingTop; }
+    float getCustomPaddingBottom() const { return customPaddingBottom; }
+    float getCustomPaddingLeft() const { return customPaddingLeft; }
+    float getCustomPaddingRight() const { return customPaddingRight; }
     
     static inline const juce::Colour labelTextColour {0xffaaaaaa}; /* #aaaaaa - Gray label text */
     
@@ -255,8 +369,8 @@ public:
     /** Set a custom text color for the value display */
     void setValueTextColour (juce::Colour colour) { valueTextColour = colour; }
     
-    /** Get the current value text color */
-    juce::Colour getValueTextColour() const { return valueTextColour; }
+    /** Get the current value text color (returns inactive color when disabled) */
+    juce::Colour getValueTextColour() const { return sliderEnabled ? valueTextColour : ColorPalette::inactiveLabelColour; }
     
     /** Update the label text (useful when reassigning to different parameter) */
     void setLabelText (const juce::String& text);
@@ -269,6 +383,19 @@ public:
     
     /** Get the current value suffix */
     juce::String getValueSuffix() const { return valueSuffix; }
+    
+    /**
+     * Enable or disable the slider (inactive state).
+     * When inactive:
+     * - Slider does not respond to mouse interaction
+     * - Track, thumb, and fill bar are rendered with inactive colors
+     * - Labels and value text are dimmed
+     * This is different from being detached from a parameter.
+     */
+    void setSliderEnabled (bool enabled);
+    
+    /** Check if the slider is currently enabled */
+    bool isSliderEnabled() const { return sliderEnabled; }
     
     /** Set the number of decimal places for value display */
     void setDecimalPlaces (int places) { valueDecimalPlaces = places; }
@@ -287,14 +414,26 @@ public:
     void setInterval (double interval) { slider.setRange (slider.getMinimum(), slider.getMaximum(), interval); }
     
     /**
+     * Set the value display mode for this slider.
+     * - Default: Standard numeric display with suffix
+     * - PanLR: L100 to C to R100 format (for L/R pan, center = 0)
+     * - PositionFB: F100 to C to B100 format (for Front/Back, top = front)
+     * - Percentage: Simple 0-100% display
+     */
+    void setValueDisplayMode (ValueDisplayMode mode);
+    
+    /** Get the current value display mode */
+    ValueDisplayMode getValueDisplayMode() const { return valueDisplayMode; }
+    
+    /**
      * Enable pan display mode for L/R horizontal sliders.
-     * When enabled, displays "L99" to "R99" format with direction label above value.
-     * Also inverts the slider direction so left = negative, right = positive.
+     * @deprecated Use setValueDisplayMode(ValueDisplayMode::PanLR) instead.
+     * When enabled, displays "L100" to "R100" format with direction label.
      */
     void setUsePanDisplay (bool usePan);
     
     /** Check if pan display mode is enabled */
-    bool getUsePanDisplay() const { return usePanDisplay; }
+    bool getUsePanDisplay() const { return valueDisplayMode == ValueDisplayMode::PanLeftRight; }
     
     //==========================================================================
     // ACCESSORS
@@ -377,8 +516,17 @@ private:
     juce::Colour accentColour {0xffffffff};  /* #ffffff */ // Custom accent color (white default)
     juce::Colour valueTextColour {0xffcccccc};  /* #cccccc */ // Custom text color (light grey default)
     bool showDebugBorder = false;       // Show debug border around component bounds
-    bool usePanDisplay = false;         // Use L/R pan display mode for horizontal sliders
+    ValueDisplayMode valueDisplayMode = ValueDisplayMode::Standard;  // How to format/display the value
     bool useAttributedLabel = false;    // Use AttributedString for label instead of plain Label
+    bool sliderEnabled = true;          // Whether slider responds to interaction (false = greyed out)
+    float customLabelSpacing = -1.0f;   // Per-instance label spacing override (-1 = use default)
+    float customLabelFontSize = -1.0f;  // Per-instance label font size override (-1 = use default)
+    float customPaddingTop = -1.0f;     // Per-instance top padding override (-1 = use default)
+    float customPaddingBottom = -1.0f;  // Per-instance bottom padding override (-1 = use default)
+    float customPaddingLeft = -1.0f;    // Per-instance left padding override (-1 = use default)
+    float customPaddingRight = -1.0f;   // Per-instance right padding override (-1 = use default)
+    float customLabelHeight = -1.0f;    // Per-instance label height override (-1 = use default)
+    juce::Justification labelJustification {juce::Justification::centred};  // Label text justification
     juce::AttributedString attributedLabel;  // Rich text label (used when useAttributedLabel=true)
     
     // Text editor for manual value entry (double-click to activate)

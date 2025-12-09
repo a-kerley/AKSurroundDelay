@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "SurroundStageView.h"
+#include "ColorPalette.h"
 
 /**
  * Segmented control for selecting view presets
@@ -22,14 +23,6 @@ public:
     static constexpr float pillPadding = 2.0f;
     static constexpr float animationSpeed = 0.15f;  // 0-1 progress per frame
     static constexpr float baseFontSize = 12.0f;    // Font size at 1.0x scale
-    
-    // Colors
-    static inline const juce::Colour borderColour {0xff4a4a4a};      /* #4a4a4a */
-    static inline const juce::Colour pillColour {0xff5a5a5a};        /* #5a5a5a */
-    static inline const juce::Colour pillDimmedColour {0xff3a3a3a};  /* #3a3a3a */
-    static inline const juce::Colour textColour {0xffffffff};        /* #ffffff */
-    static inline const juce::Colour textDimmedColour {0xff888888};  /* #888888 */
-    static inline const juce::Colour backgroundColour {0xff2a2a2a};  /* #2a2a2a */
     
     //==========================================================================
     ViewPresetSelector();

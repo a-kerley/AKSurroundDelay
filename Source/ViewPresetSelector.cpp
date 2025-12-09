@@ -60,15 +60,15 @@ void ViewPresetSelector::paint (juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     
     // Draw background with border
-    g.setColour (backgroundColour);
+    g.setColour (ColorPalette::presetBackgroundColour);
     g.fillRoundedRectangle (bounds, cornerRadius);
     
-    g.setColour (borderColour);
+    g.setColour (ColorPalette::presetBorderColour);
     g.drawRoundedRectangle (bounds.reduced (borderWidth * 0.5f), cornerRadius, borderWidth);
     
     // Draw the animated pill (highlight for selected segment)
     auto pillBounds = getPillBounds();
-    g.setColour (isCustom ? pillDimmedColour : pillColour);
+    g.setColour (isCustom ? ColorPalette::presetPillDimmedColour : ColorPalette::presetPillColour);
     g.fillRoundedRectangle (pillBounds, cornerRadius - pillPadding);
     
     // Draw segment labels
@@ -81,9 +81,9 @@ void ViewPresetSelector::paint (juce::Graphics& g)
         // Text color: white if this is the selected segment, dimmed otherwise
         bool isSelected = (i == currentIndex);
         if (isCustom)
-            g.setColour (textDimmedColour);
+            g.setColour (ColorPalette::presetTextDimmedColour);
         else
-            g.setColour (isSelected ? textColour : textDimmedColour);
+            g.setColour (isSelected ? ColorPalette::presetTextColour : ColorPalette::presetTextDimmedColour);
         
         g.drawText (presetLabels[i], segmentBounds, juce::Justification::centred);
     }

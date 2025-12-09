@@ -507,6 +507,170 @@ ls -la ~/Library/Audio/Plug-Ins/Components/Surround\ Delay.component
 rm -rf build && mkdir build && cd build && cmake .. && cmake --build . -- -j8
 ```
 
+## Control Groups & Value Display Modes
+
+### Overview
+Control groups bundle related sliders (e.g., position controls for L/R, F/B, Height) into a single reusable component. This section documents patterns for implementing control groups with specialized value formatting.
+
+### ValueDisplayMode Enum
+SliderModule supports specialized value formatting via `ValueDisplayMode`:
+
+```cpp
+enum class ValueDisplayMode
+{
+    Standard,      // Default: shows raw value (e.g., "0.50", "100")
+    PanLeftRight,  // Bipolar L/R: "L100", "C", "R100"
+    FrontBack,     // Bipolar F/B: "F100", "C", "B100"
+    Percent        // 0-100%: "0%", "50%", "100%"
+};
+
+// Usage
+slider.setValueDisplayMode (ValueDisplayMode::PanLeftRight);
+```
+
+### Parameter ID Naming Convention
+**CRITICAL**: Parameter IDs follow the pattern `paramName + tapIndex` where tapIndex is **1-based**:
+
+```cpp
+// ✅ CORRECT - 1-based indexing
+juce::String paramId = "panX" + juce::String (tapIndex);  // panX1, panX2, panX3...
+
+// ❌ WRONG - 0-based indexing
+juce::String paramId = "panX" + juce::String (tapIndex);  // panX0 doesn't exist!
+```
+
+Common parameter patterns:
+- Position: `panX1`, `panY1`, `panZ1` (L/R, F/B, Height)
+- Delay: `delayTime1`, `feedback1`, `mix1`
+- Filter: `filterFreq1`, `filterQ1`
+
+### Color Palette System
+ColorPalette provides paired colors for each tap - an accent color AND a readable text color:
+
+```cpp
+// ColorPalette.h structure
+struct ColourPair
+{
+    juce::Colour background;  // Accent color (for track tinting)
+    juce::Colour text;        // Text color readable on that background
+};
+
+static inline const std::array<ColourPair, 8> palettePairs = {{
+    { {0xffE0B0FF}, {0xff2a1a3a} },  // Mauve / Dark purple text
+    { {0xffFFB347}, {0xff3a2a1a} },  // Pastel orange / Dark orange text
+    // ... etc
+}};
+```
+
+**Usage in control groups:**
+```cpp
+void setColour (juce::Colour accent, int colourIndex)
+{
+    // Accent color for track/thumb tinting
+    lrSlider.setAccentColour (accent);
+    
+    // Associated text color for value display (readable on thumb)
+    auto textColour = ColorPalette::palettePairs[colourIndex].text;
+    lrSlider.setValueTextColour (textColour);
+}
+```
+
+### Center Detection for Bipolar Parameters
+For parameters with -1 to +1 range, detect center position with tolerance:
+
+```cpp
+// In CustomLookAndFeel::drawLinearSlider()
+bool isAtCenter = std::abs (currentValue) < 0.005f;  // 0.5% tolerance
+
+if (isAtCenter)
+    valueText = "C";
+else if (currentValue < 0)
+    valueText = "L" + juce::String (static_cast<int> (std::abs (currentValue) * 100));
+else
+    valueText = "R" + juce::String (static_cast<int> (currentValue * 100));
+```
+
+### Text Editor Value Formatting
+When user double-clicks to edit a value, small-range parameters need decimal places:
+
+```cpp
+// In SliderModule's TextEditor creation
+float range = slider.getMaximum() - slider.getMinimum();
+int decimalPlaces = (range <= 2.0f) ? 2 : 0;  // Bipolar (-1 to 1) needs decimals
+
+editor.setText (juce::String (slider.getValue(), decimalPlaces), false);
+```
+
+### Inactive State Handling
+When a slider is disabled, grey out both the SVG track and the value text:
+
+```cpp
+// Value text color
+juce::Colour SliderModule::getValueTextColour() const
+{
+    if (! slider.isEnabled())
+        return juce::Colour {0xff666666};  // Grey when inactive
+    return valueTextColour;
+}
+
+// Track SVG tinting (in CustomLookAndFeel)
+auto tintColour = slider.isEnabled() ? accentColour : juce::Colour {0xff666666};
+```
+
+### Control Group Implementation Pattern
+Example structure for a position control group:
+
+```cpp
+class PositionControlGroup : public juce::Component
+{
+public:
+    PositionControlGroup (int tapIndex);
+    
+    void attachToParameters (juce::AudioProcessorValueTreeState& apvts);
+    void setColour (juce::Colour accent, int colourIndex);
+    void setValueTextColour (juce::Colour colour);
+    void setScaleFactor (float scale);
+    
+private:
+    int tapIndex;
+    SliderModule lrSlider;  // Horizontal, PanLeftRight mode
+    SliderModule fbSlider;  // Vertical, FrontBack mode
+    SliderModule heightSlider;  // Small vertical, Percent mode
+};
+
+// Constructor - set up display modes
+PositionControlGroup::PositionControlGroup (int tapIdx)
+    : tapIndex (tapIdx),
+      lrSlider ("L/R", FaderStyle::Fader_28x84_HorizontalLeftRight),
+      fbSlider ("F/B", FaderStyle::Fader_32x129_FrontBack),
+      heightSlider ("HGT", FaderStyle::Fader_22x79)
+{
+    lrSlider.setValueDisplayMode (ValueDisplayMode::PanLeftRight);
+    fbSlider.setValueDisplayMode (ValueDisplayMode::FrontBack);
+    heightSlider.setValueDisplayMode (ValueDisplayMode::Percent);
+    
+    addAndMakeVisible (lrSlider);
+    addAndMakeVisible (fbSlider);
+    addAndMakeVisible (heightSlider);
+}
+
+// Attach with correct parameter IDs (1-based!)
+void PositionControlGroup::attachToParameters (juce::AudioProcessorValueTreeState& apvts)
+{
+    lrSlider.attachToParameter (apvts, "panX" + juce::String (tapIndex));
+    fbSlider.attachToParameter (apvts, "panY" + juce::String (tapIndex));
+    heightSlider.attachToParameter (apvts, "panZ" + juce::String (tapIndex));
+}
+```
+
+### Common Pitfalls
+
+1. **Wrong parameter IDs**: Always use 1-based indexing (`panX1` not `panX0`)
+2. **Missing text color**: Set both accent AND text color from ColorPalette
+3. **Text editor shows "0"**: Check range detection - use 2 decimals for ranges ≤2.0
+4. **Slider not responding**: Verify parameter exists in APVTS with exact ID
+5. **Wrong center detection**: Use tolerance (0.005f) not exact equality
+
 ## Contact & License
 - Developer: [Your Name]
 - License: [Your License]
