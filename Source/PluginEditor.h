@@ -7,13 +7,16 @@
 #include "SliderModule.h"
 #include "SurroundStageView.h"
 #include "ViewPresetSelector.h"
+#include "ResizeHandle.h"
 #include <memory>
 
 //==============================================================================
 /**
- * TapMatrix Audio Processor Editor - Clean Slate
+ * TapMatrix Audio Processor Editor
  * 
- * Ready for custom UI implementation
+ * Supports UI scaling from 1.0x to 3.0x with locked 55:41 aspect ratio.
+ * Base size is 1100x820 pixels. Scale factor is stepped by 0.1.
+ * All child components should call getScaleFactor() to scale their dimensions.
  */
 class TapMatrixAudioProcessorEditor : public juce::AudioProcessorEditor,
                                        public juce::Timer
@@ -27,6 +30,15 @@ public:
     
     // Timer callback to sync view preset state
     void timerCallback() override;
+    
+    //==========================================================================
+    // UI SCALING
+    //==========================================================================
+    /** Get the current UI scale factor (1.0 to 3.0, stepped by 0.1) */
+    float getScaleFactor() const { return currentScaleFactor; }
+    
+    /** Set the UI scale factor and resize the window accordingly */
+    void setUIScaleFactorAndResize (float newScale);
 
 private:
     // Reference to processor
@@ -55,7 +67,15 @@ private:
     // View preset selector (segmented control)
     ViewPresetSelector viewPresetSelector;
     
+    // Resize handle for bottom-right corner
+    ResizeHandle resizeHandle;
+    
+    // Current UI scale factor (1.0 to 3.0)
+    float currentScaleFactor = 1.0f;
+    
     void setupViewPresetSelector();
+    void setupResizeHandle();
+    void updateAllComponentScales();  // Update scale factor on all child components
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TapMatrixAudioProcessorEditor)
 };

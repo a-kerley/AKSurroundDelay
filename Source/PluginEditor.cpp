@@ -1,13 +1,20 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "ColorPalette.h"
+#include "TextStyles.h"
 
 //==============================================================================
 TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
+    // Restore scale factor from processor state
+    currentScaleFactor = p.getUIScaleFactor();
+    
     // Set custom LookAndFeel
     setLookAndFeel (&customLookAndFeel);
+    
+    // Setup resize handle
+    setupResizeHandle();
     
     // Setup 3D Surround Stage View
     addAndMakeVisible (surroundStageView);
@@ -28,7 +35,7 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // 22x170 - Slim vertical fader - Output Gain
     slider_22x170.getSlider().setLookAndFeel (&customLookAndFeel);
     slider_22x170.attachToParameter (p.getParameters(), "outputGain");
-    slider_22x170.setLabelText ("OUT");
+    slider_22x170.setLabelText ("OUTPUT\nGAIN");
     slider_22x170.setValueSuffix ("dB");
     slider_22x170.setShowDebugBorder (true);
     addAndMakeVisible (slider_22x170);
@@ -75,11 +82,16 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Initialize slider colors based on default hue value
     updateSliderColors();
     
+    // Apply restored scale factor to all child components
+    updateAllComponentScales();
+    
     // Start timer to sync view preset state (30 FPS is enough for UI sync)
     startTimerHz (30);
     
-    // Set plugin window size (wider to accommodate all test sliders)
-    setSize (1000, 700);
+    // Set plugin window size based on restored scale factor
+    // Base size: 1100x820 (aspect ratio 55:41)
+    setSize (UIScaling::getWidthForScale (currentScaleFactor),
+             UIScaling::getHeightForScale (currentScaleFactor));
 }
 
 TapMatrixAudioProcessorEditor::~TapMatrixAudioProcessorEditor()
@@ -104,12 +116,22 @@ void TapMatrixAudioProcessorEditor::paint (juce::Graphics& g)
 void TapMatrixAudioProcessorEditor::resized()
 {
     auto bounds = getLocalBounds();
-    const int padding = 20;
-    const int viewportSize = 500;
-    const int selectorHeight = 28;
-    const int selectorWidth = 320;
+    const float scale = currentScaleFactor;
     
-    // Left side: 3D viewport (500x500) with padding
+    // Scale all layout constants
+    const int padding = static_cast<int> (20 * scale);
+    const int viewportSize = static_cast<int> (500 * scale);
+    const int selectorHeight = static_cast<int> (28 * scale);
+    const int selectorWidth = static_cast<int> (320 * scale);
+    
+    // Resize handle in bottom-right corner (always 16x16, unscaled)
+    resizeHandle.setBounds (bounds.getRight() - ResizeHandle::handleSize,
+                            bounds.getBottom() - ResizeHandle::handleSize,
+                            ResizeHandle::handleSize,
+                            ResizeHandle::handleSize);
+    resizeHandle.toFront (false);
+    
+    // Left side: 3D viewport with padding
     auto viewportArea = bounds.removeFromLeft (viewportSize + padding * 2);
     viewportArea.reduce (padding, padding);
     
@@ -117,7 +139,7 @@ void TapMatrixAudioProcessorEditor::resized()
     surroundStageView.setBounds (viewportArea.removeFromTop (viewportSize));
     
     // View preset selector below viewport (centered)
-    viewportArea.removeFromTop (10); // spacing
+    viewportArea.removeFromTop (static_cast<int> (10 * scale)); // spacing
     auto selectorArea = viewportArea.removeFromTop (selectorHeight);
     selectorArea = selectorArea.withSizeKeepingCentre (selectorWidth, selectorHeight);
     viewPresetSelector.setBounds (selectorArea);
@@ -127,7 +149,7 @@ void TapMatrixAudioProcessorEditor::resized()
     controlsArea.reduce (padding, padding);
     
     // Layout all sliders in a row at the top
-    int sliderSpacing = 10;
+    int sliderSpacing = static_cast<int> (10 * scale);
     int xPos = controlsArea.getX();
     int yPos = controlsArea.getY();
     
@@ -156,7 +178,7 @@ void TapMatrixAudioProcessorEditor::resized()
     hueSlider.setBounds (xPos, yPos, hueSlider.getPreferredWidth(), hueSlider.getPreferredHeight());
     
     // Row 2: Horizontal slider below
-    int row2Y = yPos + slider_38x170.getPreferredHeight() + 20;
+    int row2Y = yPos + slider_38x170.getPreferredHeight() + static_cast<int> (20 * scale);
     slider_28x84H.setBounds (controlsArea.getX(), row2Y, slider_28x84H.getPreferredWidth(), slider_28x84H.getPreferredHeight());
 }
 
@@ -168,6 +190,54 @@ void TapMatrixAudioProcessorEditor::setupViewPresetSelector()
     };
     
     addAndMakeVisible (viewPresetSelector);
+}
+
+void TapMatrixAudioProcessorEditor::setupResizeHandle()
+{
+    resizeHandle.onResize = [this] (float newScale)
+    {
+        setUIScaleFactorAndResize (newScale);
+    };
+    
+    addAndMakeVisible (resizeHandle);
+}
+
+void TapMatrixAudioProcessorEditor::setUIScaleFactorAndResize (float newScale)
+{
+    // Snap to 0.1 steps and clamp to valid range
+    newScale = UIScaling::snapToStep (newScale);
+    
+    if (std::abs (newScale - currentScaleFactor) < 0.01f)
+        return;  // No significant change
+    
+    currentScaleFactor = newScale;
+    
+    // Save to processor state for persistence
+    audioProcessor.setUIScaleFactor (currentScaleFactor);
+    
+    // Update scale on all child components
+    updateAllComponentScales();
+    
+    // Resize the window
+    setSize (UIScaling::getWidthForScale (currentScaleFactor),
+             UIScaling::getHeightForScale (currentScaleFactor));
+}
+
+void TapMatrixAudioProcessorEditor::updateAllComponentScales()
+{
+    // Update all SliderModule components with new scale factor
+    slider_38x170.setScaleFactor (currentScaleFactor);
+    slider_22x170.setScaleFactor (currentScaleFactor);
+    slider_32x129.setScaleFactor (currentScaleFactor);
+    slider_32x129FB.setScaleFactor (currentScaleFactor);
+    slider_22x79.setScaleFactor (currentScaleFactor);
+    slider_28x84H.setScaleFactor (currentScaleFactor);
+    hueSlider.setScaleFactor (currentScaleFactor);
+    
+    // Update ViewPresetSelector with scale factor
+    viewPresetSelector.setScaleFactor (currentScaleFactor);
+    
+    // TODO: Add setScaleFactor to SurroundStageView when needed
 }
 
 void TapMatrixAudioProcessorEditor::timerCallback()

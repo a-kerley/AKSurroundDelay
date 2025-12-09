@@ -837,6 +837,10 @@ juce::AudioProcessorEditor* TapMatrixAudioProcessor::createEditor()
 void TapMatrixAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = parameters.copyState();
+    
+    // Add UI state to the saved state
+    state.setProperty ("uiScaleFactor", uiScaleFactor, nullptr);
+    
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
 }
@@ -846,8 +850,18 @@ void TapMatrixAudioProcessor::setStateInformation (const void* data, int sizeInB
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     
     if (xmlState.get() != nullptr)
+    {
         if (xmlState->hasTagName (parameters.state.getType()))
-            parameters.replaceState (juce::ValueTree::fromXml (*xmlState));
+        {
+            auto newState = juce::ValueTree::fromXml (*xmlState);
+            
+            // Restore UI state
+            if (newState.hasProperty ("uiScaleFactor"))
+                uiScaleFactor = static_cast<float> (newState.getProperty ("uiScaleFactor"));
+            
+            parameters.replaceState (newState);
+        }
+    }
 }
 
 //==============================================================================

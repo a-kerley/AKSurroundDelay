@@ -131,6 +131,17 @@ public:
     // Public access to parameters for editor
     juce::AudioProcessorValueTreeState& getParameters() { return parameters; }
     
+    //==============================================================================
+    // UI State (persisted with plugin state)
+    /** Get the current UI scale factor (1.0 to 3.0, stepped by 0.1) */
+    float getUIScaleFactor() const { return uiScaleFactor; }
+    
+    /** Set the UI scale factor (clamped to 1.0-3.0, snapped to 0.1 steps) */
+    void setUIScaleFactor (float scale)
+    {
+        uiScaleFactor = juce::jlimit (1.0f, 3.0f, std::round (scale * 10.0f) / 10.0f);
+    }
+    
     // Get tap level for metering (0.0 to 1.0)
     float getTapLevel (int tapIndex) const
     {
@@ -211,6 +222,9 @@ private:
     
     // Current preset index
     int currentPresetIndex = 0;
+    
+    // UI state (persisted with plugin state)
+    float uiScaleFactor = 1.0f;  // Default to 1x scale
     
     // Parameter ID generation helpers
     static juce::String getTapParamID (const char* paramName, int tapIndex);

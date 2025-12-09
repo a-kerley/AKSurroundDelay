@@ -21,6 +21,7 @@ public:
     static constexpr float borderWidth = 1.0f;
     static constexpr float pillPadding = 2.0f;
     static constexpr float animationSpeed = 0.15f;  // 0-1 progress per frame
+    static constexpr float baseFontSize = 12.0f;    // Font size at 1.0x scale
     
     // Colors
     static inline const juce::Colour borderColour {0xff4a4a4a};      /* #4a4a4a */
@@ -43,6 +44,12 @@ public:
     
     // Set whether the view is in custom (dragged) state
     void setCustomState (bool isCustom);
+    
+    // Set the UI scale factor (1.0 to 3.0)
+    void setScaleFactor (float scale);
+    
+    // Get the current scale factor
+    float getScaleFactor() const { return currentScaleFactor; }
     
     //==========================================================================
     void paint (juce::Graphics& g) override;
@@ -68,6 +75,7 @@ private:
     float pillPosition = 0.0f;      // Animated position (0.0 to numPresets-1)
     float targetPosition = 0.0f;    // Target position for animation
     bool isCustom = false;          // Whether view has been manually rotated
+    float currentScaleFactor = 1.0f; // UI scale factor (1.0 to 3.0)
     
     //==========================================================================
     // Animation

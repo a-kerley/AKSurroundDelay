@@ -14,6 +14,15 @@ void SliderModuleSlider::mouseDoubleClick (const juce::MouseEvent& event)
 
 void SliderModuleSlider::mouseDown (const juce::MouseEvent& event)
 {
+    // Check for Cmd+click or Alt+click reset FIRST (before JUCE handles the drag)
+    // This ensures reset works when clicking directly on the slider track/thumb
+    if (event.mods.isCommandDown() || event.mods.isAltDown())
+    {
+        if (parentModule != nullptr)
+            parentModule->handleResetToDefault();
+        return;  // Don't start drag
+    }
+    
     // If text editor is open, dismiss it first
     if (parentModule != nullptr && parentModule->isTextEditorActive())
     {
@@ -37,8 +46,8 @@ std::map<FaderStyle, bool> SliderModule::colorVariantsLoaded;         // Color v
 //==============================================================================
 // FADER STYLE INFO LOOKUP
 //
-// Returns dimensions and asset info for each fader style.
-// All dimensions are multiplied by uiScale for consistent scaling.
+// Returns BASE dimensions and asset info for each fader style (at 1.0x scale).
+// These values are then multiplied by the scaleFactor when applied.
 //
 // SPRITESHEET NOTES:
 // - All PNGs are rendered at 4x resolution for crisp Retina display
@@ -47,137 +56,222 @@ std::map<FaderStyle, bool> SliderModule::colorVariantsLoaded;         // Color v
 // - Total PNG height = spritesheetTotalFrames × spritesheetFrameHeight
 //
 // Example for Fader_38x170:
-//   Track: 38×170 display pixels
+//   Track: 38×170 display pixels (at 1.0x scale)
 //   PNG: 152×680 per frame (4x), 170 frames stacked = 152×115600 total
 //==============================================================================
-FaderStyleInfo SliderModule::getStyleInfo (FaderStyle style)
+FaderStyleInfo SliderModule::getBaseStyleInfo (FaderStyle style)
 {
-    constexpr float s = uiScale;  // Shorthand for scaling
+    // All dimensional values are BASE (unscaled) - will be multiplied by scaleFactor
+    // Spritesheet values are at 4x resolution (divide by 4 for display size)
     
-    // Return format: { trackW, trackH, thumbW, thumbH, thumbInset, frames, frameW@4x, frameH@4x, folder, isHoriz }
     switch (style)
     {
+        //======================================================================
+        // STANDARD VERTICAL FADER (38×170)
+        // The default/primary fader size - tall with good travel range
+        //======================================================================
         case FaderStyle::Fader_38x170:
-            // STANDARD VERTICAL FADER (default size)
-            // Display size: 38×170 pixels
-            // Spritesheet: 152×680 per frame (4x), 170 frames total (one per pixel of travel)
-            // PNG total: 152 × 115600 (170 × 680)
-            return { 38.0f * s,   // trackWidth
-                     170.0f * s,  // trackHeight
-                     34.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     170,         // frames (= trackHeight in pixels, one frame per position)
-                     152, 680,    // frameWidth, frameHeight at 4x resolution
-                     "Fader 38 x 170", false,
-                     38.0f * s,   // textEditorWidth
-                     4.0f * s };  // textEditorPadding
+            return {
+                // Track dimensions
+                .trackWidth         = 38.0f,
+                .trackHeight        = 170.0f,
+                // Thumb dimensions  
+                .thumbWidth         = 34.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                // Spritesheet (4x resolution)
+                .spritesheetTotalFrames  = 170,
+                .spritesheetFrameWidth   = 152,   // 38 × 4
+                .spritesheetFrameHeight  = 680,   // 170 × 4
+                // Asset location
+                .folderName         = "Fader 38 x 170",
+                .isHorizontal       = false,
+                // Text editor
+                .textEditorWidth    = 38.0f,
+                .textEditorPadding  = 4.0f,
+                // Typography
+                .valueLabelFontSize = 9.0f
+            };
             
+        //======================================================================
+        // MEDIUM VERTICAL FADER (32×129)
+        // Slightly smaller - good for dense layouts
+        //======================================================================
         case FaderStyle::Fader_32x129:
-            // MEDIUM VERTICAL FADER
-            // Display size: 32×129 pixels
-            // Spritesheet: 128×516 per frame (4x), 129 frames total
-            // PNG total: 128 × 66564 (129 × 516)
-            return { 32.0f * s,   // trackWidth
-                     129.0f * s,  // trackHeight
-                     28.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     129,         // frames (= trackHeight in pixels)
-                     128, 516,    // frameWidth, frameHeight at 4x resolution
-                     "Fader 32 x 129", false,
-                     32.0f * s,   // textEditorWidth
-                     3.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 32.0f,
+                .trackHeight        = 129.0f,
+                .thumbWidth         = 28.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                .spritesheetTotalFrames  = 129,
+                .spritesheetFrameWidth   = 128,   // 32 × 4
+                .spritesheetFrameHeight  = 516,   // 129 × 4
+                .folderName         = "Fader 32 x 129",
+                .isHorizontal       = false,
+                .textEditorWidth    = 32.0f,
+                .textEditorPadding  = 3.0f,
+                .valueLabelFontSize = 9.0f
+            };
             
+        //======================================================================
+        // MEDIUM VERTICAL with FRONT/BACK labels (32×129)
+        // Same as above but with directional labels in the SVG
+        //======================================================================
         case FaderStyle::Fader_32x129_FrontBack:
-            // MEDIUM VERTICAL with "FRONT"/"BACK" labels printed on track SVG
-            // Display size: 32×129 pixels (same as Fader_32x129)
-            // Spritesheet: 128×516 per frame (4x), 129 frames total
-            // PNG total: 128 × 66564 (129 × 516)
-            return { 32.0f * s,   // trackWidth
-                     129.0f * s,  // trackHeight
-                     28.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     129,         // frames (= trackHeight in pixels)
-                     128, 516,    // frameWidth, frameHeight at 4x resolution
-                     "Fader 32 x 129 Front-Back", false,
-                     32.0f * s,   // textEditorWidth
-                     3.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 32.0f,
+                .trackHeight        = 129.0f,
+                .thumbWidth         = 28.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                .spritesheetTotalFrames  = 129,
+                .spritesheetFrameWidth   = 128,
+                .spritesheetFrameHeight  = 516,
+                .folderName         = "Fader 32 x 129 Front-Back",
+                .isHorizontal       = false,
+                .textEditorWidth    = 32.0f,
+                .textEditorPadding  = 3.0f,
+                .valueLabelFontSize = 9.0f
+            };
             
+        //======================================================================
+        // HORIZONTAL FADER with LEFT/RIGHT labels (28×84)
+        // Used for pan controls - L/R labels in the SVG
+        // Note: trackHeight is the travel dimension (horizontal), trackWidth is short
+        //======================================================================
         case FaderStyle::Fader_28x84_HorizontalLeftRight:
-            // HORIZONTAL FADER with "L"/"R" labels
-            // Display size: 28px tall × 84px wide (width = travel direction)
-            // Note: For horizontal, trackWidth = height, trackHeight = width (travel)
-            // Spritesheet: 336×112 per frame (4x), 84 frames total
-            // PNG total: 336 × 9408 (84 × 112)
-            return { 28.0f * s,   // trackWidth (displayed as height for horizontal)
-                     84.0f * s,   // trackHeight (displayed as width, travel direction)
-                     13.0f * s,   // thumbWidth
-                     24.0f * s,   // thumbHeight
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     0.0f * s,    // trackXOffset - nudge track left(-) or right(+)
-                     84,          // frames (= travel distance in pixels)
-                     336, 112,    // frameWidth, frameHeight at 4x resolution
-                     "Fader 28 x 84 Horizontal Left-Right", true,
-                     40.0f * s,   // textEditorWidth (wider for horizontal)
-                     4.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 28.0f,   // Short dimension (vertical)
+                .trackHeight        = 84.0f,   // Travel dimension (horizontal)
+                .thumbWidth         = 13.0f,
+                .thumbHeight        = 24.0f,
+                .thumbInset         = 2.5f,
+                .trackYOffset       = 0.0f,
+                .spritesheetTotalFrames  = 84,
+                .spritesheetFrameWidth   = 336,  // 84 × 4 (travel direction)
+                .spritesheetFrameHeight  = 112,  // 28 × 4 (short direction)
+                .folderName         = "Fader 28 x 84 Horizontal Left-Right",
+                .isHorizontal       = true,
+                .textEditorWidth    = 40.0f,
+                .textEditorPadding  = 4.0f,
+                .valueLabelFontSize = 9.0f
+            };
             
+        //======================================================================
+        // SLIM VERTICAL FADER (22×170)
+        // Narrow but tall - for tight horizontal spacing with full travel
+        //======================================================================
         case FaderStyle::Fader_22x170:
-            // SLIM VERTICAL FADER (tall, narrow)
-            // Display size: 22×170 pixels
-            // Spritesheet: 88×680 per frame (4x), 170 frames total
-            // PNG total: 88 × 115600 (170 × 680)
-            return { 22.0f * s,   // trackWidth
-                     170.0f * s,  // trackHeight
-                     18.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     170,         // frames (= trackHeight in pixels)
-                     88, 680,     // frameWidth, frameHeight at 4x resolution
-                     "Fader 22 x 170", false,
-                     26.0f * s,   // textEditorWidth (wider than track for usability)
-                     2.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 22.0f,
+                .trackHeight        = 170.0f,
+                .thumbWidth         = 18.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                .spritesheetTotalFrames  = 170,
+                .spritesheetFrameWidth   = 88,   // 22 × 4
+                .spritesheetFrameHeight  = 680,  // 170 × 4
+                .folderName         = "Fader 22 x 170",
+                .isHorizontal       = false,
+                .textEditorWidth    = 26.0f,
+                .textEditorPadding  = 2.0f,
+                .valueLabelFontSize = 8.0f       // Smaller font for slim fader
+            };
             
+        //======================================================================
+        // SMALL VERTICAL FADER (22×79)
+        // Compact - for minimal UI elements or secondary controls
+        //======================================================================
         case FaderStyle::Fader_22x79:
-            // SMALL VERTICAL FADER (compact)
-            // Display size: 22×79 pixels
-            // Spritesheet: 88×316 per frame (4x), 79 frames total
-            // PNG total: 88 × 24964 (79 × 316)
-            return { 22.0f * s,   // trackWidth
-                     79.0f * s,   // trackHeight
-                     18.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     79,          // frames (= trackHeight in pixels)
-                     88, 316,     // frameWidth, frameHeight at 4x resolution
-                     "Fader 22 x 79", false,
-                     26.0f * s,   // textEditorWidth (wider than track for usability)
-                     2.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 22.0f,
+                .trackHeight        = 79.0f,
+                .thumbWidth         = 18.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                .spritesheetTotalFrames  = 79,
+                .spritesheetFrameWidth   = 88,   // 22 × 4
+                .spritesheetFrameHeight  = 316,  // 79 × 4
+                .folderName         = "Fader 22 x 79",
+                .isHorizontal       = false,
+                .textEditorWidth    = 26.0f,
+                .textEditorPadding  = 2.0f,
+                .valueLabelFontSize = 8.0f       // Smaller font for compact fader
+            };
             
+        //======================================================================
+        // DEFAULT FALLBACK
+        //======================================================================
         default:
-            // Fallback to standard 38×170 size
-            return { 38.0f * s,   // trackWidth
-                     170.0f * s,  // trackHeight
-                     34.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
-                     13.0f * s,   // thumbHeight (affects value text height)
-                     2.5f * s,    // thumbInset - keeps value text away from track edges
-                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
-                     170,         // frames (= trackHeight in pixels)
-                     152, 680,    // frameWidth, frameHeight at 4x resolution
-                     "Fader 38 x 170", false,
-                     38.0f * s,   // textEditorWidth
-                     4.0f * s };  // textEditorPadding
+            return {
+                .trackWidth         = 38.0f,
+                .trackHeight        = 170.0f,
+                .thumbWidth         = 34.0f,
+                .thumbHeight        = 13.0f,
+                .thumbInset         = 2.8f,
+                .trackYOffset       = -1.6f,
+                .spritesheetTotalFrames  = 170,
+                .spritesheetFrameWidth   = 152,
+                .spritesheetFrameHeight  = 680,
+                .folderName         = "Fader 38 x 170",
+                .isHorizontal       = false,
+                .textEditorWidth    = 38.0f,
+                .textEditorPadding  = 4.0f,
+                .valueLabelFontSize = 9.0f
+            };
     }
 }
 
+// Apply scale factor to base style info
+FaderStyleInfo SliderModule::getStyleInfo (FaderStyle style)
+{
+    // Get base (unscaled) info - this is now just a passthrough that applies default 1.0 scale
+    // The actual scaling happens in setScaleFactor() which updates styleInfo
+    return getBaseStyleInfo (style);
+}
+
+void SliderModule::setScaleFactor (float scale)
+{
+    scale = juce::jlimit (1.0f, 3.0f, scale);
+    if (std::abs (scale - currentScaleFactor) < 0.01f)
+        return;  // No significant change
+    
+    currentScaleFactor = scale;
+    
+    // Recalculate styleInfo with new scale factor
+    auto baseInfo = getBaseStyleInfo (faderStyle);
+    styleInfo.trackWidth = baseInfo.trackWidth * scale;
+    styleInfo.trackHeight = baseInfo.trackHeight * scale;
+    styleInfo.thumbWidth = baseInfo.thumbWidth * scale;
+    styleInfo.thumbHeight = baseInfo.thumbHeight * scale;
+    styleInfo.thumbInset = baseInfo.thumbInset * scale;
+    styleInfo.trackYOffset = baseInfo.trackYOffset * scale;
+    styleInfo.textEditorWidth = baseInfo.textEditorWidth * scale;
+    styleInfo.textEditorPadding = baseInfo.textEditorPadding * scale;
+    styleInfo.valueLabelFontSize = baseInfo.valueLabelFontSize * scale;
+    // Non-scaled fields remain the same
+    styleInfo.spritesheetTotalFrames = baseInfo.spritesheetTotalFrames;
+    styleInfo.spritesheetFrameWidth = baseInfo.spritesheetFrameWidth;
+    styleInfo.spritesheetFrameHeight = baseInfo.spritesheetFrameHeight;
+    styleInfo.folderName = baseInfo.folderName;
+    styleInfo.isHorizontal = baseInfo.isHorizontal;
+    
+    // Update label font
+    nameLabel.setFont (juce::FontOptions (labelFontSize()));
+    
+    // Trigger relayout
+    resized();
+    repaint();
+}
+
 SliderModule::SliderModule (const juce::String& labelText, FaderStyle style)
-    : faderStyle (style), styleInfo (getStyleInfo (style))
+    : faderStyle (style), styleInfo (getBaseStyleInfo (style))
 {
     // Disable clipping so labels can extend beyond component bounds
     setInterceptsMouseClicks (true, true);
@@ -196,6 +290,13 @@ SliderModule::SliderModule (const juce::String& labelText, FaderStyle style)
     slider.setValue (0.5, juce::dontSendNotification); // Set default value
     slider.setDoubleClickReturnValue (false, 0.5);  // Disable JUCE's built-in double-click (we handle it ourselves)
     slider.setSliderSnapsToMousePosition (false);  // Use relative dragging instead of jumping to click position
+    
+    // Normalize drag sensitivity across all fader sizes
+    // By setting a fixed pixel distance (200px) for full range travel,
+    // all faders feel the same regardless of their actual height
+    // This gives a consistent, comfortable drag feel
+    slider.setMouseDragSensitivity (200);
+    
     addAndMakeVisible (slider);
     
     // Setup name label (below slider)
@@ -203,11 +304,12 @@ SliderModule::SliderModule (const juce::String& labelText, FaderStyle style)
     if (labelText.isNotEmpty())
     {
         nameLabel.setText (labelText, juce::dontSendNotification);
-        nameLabel.setFont (juce::FontOptions (labelFontSize));
-        nameLabel.setJustificationType (juce::Justification::centredTop);  // Top-align to prevent stretching
+        nameLabel.setFont (juce::FontOptions (labelFontSize()));  // Use scaled font size
+        nameLabel.setJustificationType (juce::Justification::centred);  // Center horizontally and vertically
         nameLabel.setColour (juce::Label::textColourId, labelTextColour);
-        nameLabel.setMinimumHorizontalScale (1.0f);  // Don't squash text horizontally
+        nameLabel.setMinimumHorizontalScale (1.0f);  // Never squash text - let it overflow if needed
         nameLabel.setInterceptsMouseClicks (false, false);  // Allow clicks to pass through
+        nameLabel.setPaintingIsUnclipped (true);  // Allow text to paint outside bounds if needed
         addAndMakeVisible (nameLabel);
     }
     
@@ -249,6 +351,23 @@ void SliderModule::setLabelText (const juce::String& text)
 {
     parameterName = text;
     nameLabel.setText (text, juce::dontSendNotification);
+}
+
+void SliderModule::setLabelText (const juce::AttributedString& attributedText)
+{
+    // Store plain text version for parameter name
+    parameterName = attributedText.getText();
+    
+    // Store the attributed string for custom painting
+    // Ensure word wrap is disabled for single-line labels
+    attributedLabel = attributedText;
+    attributedLabel.setWordWrap (juce::AttributedString::none);
+    useAttributedLabel = true;
+    
+    // Hide the standard label - we'll draw the AttributedString ourselves
+    nameLabel.setVisible (false);
+    
+    repaint();
 }
 
 void SliderModule::setUsePanDisplay (bool usePan)
@@ -513,22 +632,54 @@ void SliderModule::paint (juce::Graphics& g)
         g.setColour (juce::Colours::red);
         g.drawRect (getLocalBounds(), 1);
     }
+    
+    // Draw AttributedString label if using rich text mode
+    if (useAttributedLabel)
+    {
+        // Calculate label bounds (same logic as resized())
+        auto bounds = getLocalBounds();
+        bounds.removeFromTop ((int)componentPaddingTop());
+        bounds.removeFromBottom ((int)componentPaddingBottom());
+        auto labelBounds = bounds.removeFromBottom ((int)labelHeight());
+        
+        // Create a TextLayout from the AttributedString
+        // Use a very large width to prevent any word wrapping - single line only
+        juce::TextLayout layout;
+        layout.createLayout (attributedLabel, 10000.0f);  // Large width = no wrapping
+        
+        // Draw centered in the label bounds
+        float textWidth = layout.getWidth();
+        float textHeight = layout.getHeight();
+        float xOffset = ((float)labelBounds.getWidth() - textWidth) * 0.5f;
+        float yOffset = ((float)labelBounds.getHeight() - textHeight) * 0.5f;
+        layout.draw (g, juce::Rectangle<float> ((float)labelBounds.getX() + xOffset, 
+                                                  (float)labelBounds.getY() + yOffset,
+                                                  textWidth, textHeight));
+    }
 }
 
 void SliderModule::resized()
 {
     auto bounds = getLocalBounds();
     
-    // Remove component padding from all sides
-    bounds.removeFromTop ((int)componentPaddingTop);
-    bounds.removeFromBottom ((int)componentPaddingBottom);
-    bounds.removeFromLeft ((int)componentPaddingLeft);
-    bounds.removeFromRight ((int)componentPaddingRight);
+    // Remove component padding from top and bottom only
+    bounds.removeFromTop ((int)componentPaddingTop());
+    bounds.removeFromBottom ((int)componentPaddingBottom());
     
-    // Layout: [Slider] [Spacing] [Name Label]
-    // Name label below slider with configurable spacing
-    nameLabel.setBounds (bounds.removeFromBottom ((int)labelHeight));
-    bounds.removeFromBottom ((int)labelSpacing);  // Add spacing gap
+    // Calculate label bounds - use a very wide area centered on the component
+    // to prevent any text wrapping. The label has setPaintingIsUnclipped(true)
+    // so it can paint beyond the component bounds if needed.
+    auto labelY = bounds.getBottom() - (int)labelHeight();
+    int labelWidth = 1000;  // Very wide to prevent wrapping
+    int labelX = (getWidth() - labelWidth) / 2;  // Center on component
+    nameLabel.setBounds (labelX, labelY, labelWidth, (int)labelHeight());
+    
+    bounds.removeFromBottom ((int)labelHeight());
+    bounds.removeFromBottom ((int)labelSpacing());  // Add spacing gap
+    
+    // Now remove horizontal padding for the slider area
+    bounds.removeFromLeft ((int)componentPaddingLeft());
+    bounds.removeFromRight ((int)componentPaddingRight());
     
     // Slider dimensions - for horizontal, swap width and height
     int sliderWidth, sliderHeight;
@@ -549,8 +700,23 @@ void SliderModule::resized()
 }
 
 //==============================================================================
-// MOUSE EVENTS - Double-click to edit, Cmd-click to reset
+// MOUSE EVENTS - Double-click to edit, Cmd/Alt-click to reset
 //==============================================================================
+
+void SliderModule::handleResetToDefault()
+{
+    // Reset slider to its default value
+    // Uses the double-click return value if set, otherwise defaults to 0.5
+    if (attachment != nullptr)
+    {
+        // Use the slider's double-click return value as the default
+        slider.setValue (slider.getDoubleClickReturnValue(), juce::sendNotificationSync);
+    }
+    else
+    {
+        slider.setValue (0.5, juce::sendNotificationSync);
+    }
+}
 
 void SliderModule::mouseDoubleClick (const juce::MouseEvent& event)
 {
@@ -579,19 +745,12 @@ void SliderModule::mouseDown (const juce::MouseEvent& event)
         }
     }
     
-    // Cmd+click (Mac) or Ctrl+click (Windows/Linux) resets to default value
-    if (event.mods.isCommandDown())
+    // Cmd+click (Mac) or Alt/Option+click resets to default value
+    // This handles clicks on the SliderModule background (outside slider bounds)
+    // Clicks directly on the slider are handled by SliderModuleSlider::mouseDown
+    if (event.mods.isCommandDown() || event.mods.isAltDown())
     {
-        // Get the parameter's default value if attached, otherwise use 0.5
-        if (attachment != nullptr)
-        {
-            // Use the slider's double-click return value as the default
-            slider.setValue (slider.getDoubleClickReturnValue(), juce::sendNotificationSync);
-        }
-        else
-        {
-            slider.setValue (0.5, juce::sendNotificationSync);
-        }
+        handleResetToDefault();
         return;
     }
     
@@ -620,7 +779,7 @@ void SliderModule::showTextEditor()
         valueTextEditor->setCaretVisible (true);
         valueTextEditor->setPopupMenuEnabled (false);
         valueTextEditor->setJustification (juce::Justification::centred);
-        valueTextEditor->setFont (juce::FontOptions (valueFontSize));
+        valueTextEditor->setFont (juce::FontOptions (valueFontSize()));
         valueTextEditor->setIndents (0, 0);  // Remove internal padding for better vertical centering
         valueTextEditor->setBorder (juce::BorderSize<int> (0));  // No internal border
         valueTextEditor->setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff2a2a2a)); /* #2a2a2a */
@@ -646,7 +805,7 @@ void SliderModule::showTextEditor()
     
     // Text editor dimensions
     // Height: font size + vertical padding for text + border space
-    float editorHeight = valueFontSize + 10.0f;
+    float editorHeight = valueFontSize() + 10.0f;
     
     // Width: use per-style configured width
     float editorWidth = styleInfo.textEditorWidth;
@@ -671,7 +830,7 @@ void SliderModule::showTextEditor()
     else
     {
         // Vertical slider: position at value label Y (same calculation as CustomLookAndFeel)
-        float textHeight = valueFontSize + 4.0f;
+        float textHeight = valueFontSize() + 4.0f;
         float trackY = sliderBounds.getY() + (sliderBounds.getHeight() - styleInfo.trackHeight) * 0.5f + styleInfo.trackYOffset;
         
         float halfText = textHeight * 0.5f;

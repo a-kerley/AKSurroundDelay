@@ -94,6 +94,9 @@ struct FaderStyleInfo
     // TEXT EDITOR DIMENSIONS (for manual value entry via double-click)
     float textEditorWidth;        // Width of text editor box in pixels
     float textEditorPadding;      // Horizontal padding inside text editor
+    
+    // VALUE LABEL TYPOGRAPHY
+    float valueLabelFontSize;     // Base font size for value display (scaled by uiScale)
 };
 
 //==============================================================================
@@ -132,22 +135,22 @@ public:
         return "/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets";
     }
     
-    /** Get ideal width for a given fader style (static convenience method) */
+    /** Get ideal width for a given fader style at 1.0x scale (static convenience method) */
     static int getIdealWidthForStyle (FaderStyle style)
     {
-        auto info = getStyleInfo (style);
+        auto info = getBaseStyleInfo (style);
         if (info.isHorizontal)
-            return (int)(info.trackHeight + componentPaddingLeft + componentPaddingRight);
-        return (int)(info.trackWidth + componentPaddingLeft + componentPaddingRight);
+            return (int)(info.trackHeight + baseComponentPaddingLeft + baseComponentPaddingRight);
+        return (int)(info.trackWidth + baseComponentPaddingLeft + baseComponentPaddingRight);
     }
     
-    /** Get ideal height for a given fader style (static convenience method) */
+    /** Get ideal height for a given fader style at 1.0x scale (static convenience method) */
     static int getIdealHeightForStyle (FaderStyle style)
     {
-        auto info = getStyleInfo (style);
+        auto info = getBaseStyleInfo (style);
         if (info.isHorizontal)
-            return (int)(componentPaddingTop + info.trackWidth + labelSpacing + labelHeight + componentPaddingBottom);
-        return (int)(componentPaddingTop + info.trackHeight + labelSpacing + labelHeight + componentPaddingBottom);
+            return (int)(baseComponentPaddingTop + info.trackWidth + baseLabelSpacing + baseLabelHeight + baseComponentPaddingBottom);
+        return (int)(baseComponentPaddingTop + info.trackHeight + baseLabelSpacing + baseLabelHeight + baseComponentPaddingBottom);
     }
     
     /** Get ideal width for default style (backward compatibility) */
@@ -158,40 +161,62 @@ public:
     
     //==========================================================================
     // UI SCALING
-    // Change uiScale to resize all faders proportionally (1.0 = 100%, 1.5 = 150%)
+    // The scale factor is now dynamic - set via setScaleFactor()
+    // Base dimensions (at 1.0x scale) are defined in getBaseStyleInfo()
     //==========================================================================
-    static constexpr float uiScale = 1.8f;  // Master scale factor - affects all dimensions below
+    
+    /** Set the UI scale factor for this slider (1.0 to 3.0) */
+    void setScaleFactor (float scale);
+    
+    /** Get the current scale factor */
+    float getScaleFactor() const { return currentScaleFactor; }
+    
+    /** Get base style info (unscaled dimensions) - used internally */
+    static FaderStyleInfo getBaseStyleInfo (FaderStyle style);
     
     //==========================================================================
-    // COMPONENT LAYOUT (all values scaled by uiScale)
+    // COMPONENT LAYOUT (base values at 1.0x scale - multiplied by scaleFactor)
     // These define the total component bounds around the slider track
     // 
     // Component layout (vertical slider):
     // ┌─────────────────────────────────────────┐
     // │  componentPaddingTop (8px)              │
-    // │  ┌─────────────────────────────────┐    │
-    // │  │                                 │    │
-    // │  │     TRACK (trackHeight px)      │    │
-    // │  │                                 │    │
-    // │  └─────────────────────────────────┘    │
+    // │  ┌─────────────────────────────────────┐│
+    // │  │                                     ││
+    // │  │     TRACK (trackHeight px)          ││
+    // │  │                                     ││
+    // │  └─────────────────────────────────────┘│
     // │  labelSpacing (4px)                     │
     // │  LABEL (labelHeight 12px)               │
     // │  componentPaddingBottom (4px)           │
     // └─────────────────────────────────────────┘
     //   ├─paddingLeft─┤ track ├─paddingRight─┤
     //==========================================================================
-    static constexpr float componentPaddingTop = 8.0f * uiScale;    // Space above track
-    static constexpr float componentPaddingBottom = 4.0f * uiScale; // Space below label
-    static constexpr float componentPaddingLeft = 8.0f * uiScale;   // Space left of track
-    static constexpr float componentPaddingRight = 8.0f * uiScale;  // Space right of track
-    static constexpr float labelSpacing = 4.0f * uiScale;           // Gap between track bottom and label top
-    static constexpr float labelHeight = 12.0f * uiScale;           // Height for parameter name label
+    static constexpr float baseComponentPaddingTop = 8.0f;     // Space above track (unscaled)
+    static constexpr float baseComponentPaddingBottom = 4.0f;  // Space below label (unscaled)
+    static constexpr float baseComponentPaddingLeft = 8.0f;    // Space left of track (unscaled)
+    static constexpr float baseComponentPaddingRight = 8.0f;   // Space right of track (unscaled)
+    static constexpr float baseLabelSpacing = 4.0f;            // Gap between track and label (unscaled)
+    static constexpr float baseLabelHeight = 14.0f;            // Height for parameter name label (unscaled)
+    
+    // Scaled accessors (use these for layout)
+    float componentPaddingTop() const { return baseComponentPaddingTop * currentScaleFactor; }
+    float componentPaddingBottom() const { return baseComponentPaddingBottom * currentScaleFactor; }
+    float componentPaddingLeft() const { return baseComponentPaddingLeft * currentScaleFactor; }
+    float componentPaddingRight() const { return baseComponentPaddingRight * currentScaleFactor; }
+    float labelSpacing() const { return baseLabelSpacing * currentScaleFactor; }
+    float labelHeight() const { return baseLabelHeight * currentScaleFactor; }
     
     //==========================================================================
-    // TEXT STYLING
+    // TEXT STYLING (scaled by scaleFactor)
     //==========================================================================
-    static constexpr float valueFontSize = 9.0f * uiScale;  // Font for value text on slider ("0.50", "100ms")
-    static constexpr float labelFontSize = 10.0f * uiScale; // Font for parameter name below ("GAIN", "DELAY")
+    static constexpr float baseValueFontSize = 9.0f;   // Default font for value text (unscaled)
+    static constexpr float baseLabelFontSize = 10.0f;  // Font for parameter name (unscaled)
+    
+    // Per-style value font size from styleInfo (already scaled), falls back to default
+    float valueFontSize() const { return styleInfo.valueLabelFontSize; }
+    float labelFontSize() const { return baseLabelFontSize * currentScaleFactor; }
+    
     static inline const juce::Colour labelTextColour {0xffaaaaaa}; /* #aaaaaa - Gray label text */
     
     //==========================================================================
@@ -235,6 +260,9 @@ public:
     
     /** Update the label text (useful when reassigning to different parameter) */
     void setLabelText (const juce::String& text);
+    
+    /** Update the label with rich text (AttributedString for mixed styles/colors) */
+    void setLabelText (const juce::AttributedString& attributedText);
     
     /** Set the unit suffix displayed after the value (e.g., "dB", "ms", "%", "Hz") */
     void setValueSuffix (const juce::String& suffix) { valueSuffix = suffix; }
@@ -283,32 +311,35 @@ public:
     /** Dismiss the text editor if active (for external use by custom slider) */
     void dismissTextEditor (bool commitValue) { hideTextEditor (commitValue); }
     
+    /** Reset slider to its default value (called by Cmd+Click or Alt+Click) */
+    void handleResetToDefault();
+    
     /** Get the current parameter ID this slider is attached to */
     juce::String getCurrentParameterID() const { return currentParameterID; }
     
     /** Get the fader style for this slider */
     FaderStyle getFaderStyle() const { return faderStyle; }
     
-    /** Get the style info for this slider */
+    /** Get the style info for this slider (scaled by current scale factor) */
     const FaderStyleInfo& getStyleInfo() const { return styleInfo; }
     
     /** Get whether this slider is horizontal */
     bool isHorizontal() const { return styleInfo.isHorizontal; }
     
-    /** Get the preferred width for this specific slider instance */
+    /** Get the preferred width for this specific slider instance (scaled) */
     int getPreferredWidth() const
     { 
         if (styleInfo.isHorizontal)
-            return (int)(styleInfo.trackHeight + componentPaddingLeft + componentPaddingRight);  // For horizontal, height becomes width
-        return (int)(styleInfo.trackWidth + componentPaddingLeft + componentPaddingRight); 
+            return (int)(styleInfo.trackHeight + componentPaddingLeft() + componentPaddingRight());
+        return (int)(styleInfo.trackWidth + componentPaddingLeft() + componentPaddingRight()); 
     }
     
-    /** Get the preferred height for this specific slider instance */
+    /** Get the preferred height for this specific slider instance (scaled) */
     int getPreferredHeight() const
     { 
         if (styleInfo.isHorizontal)
-            return (int)(componentPaddingTop + styleInfo.trackWidth + labelSpacing + labelHeight + componentPaddingBottom);  // For horizontal, width becomes height
-        return (int)(componentPaddingTop + styleInfo.trackHeight + labelSpacing + labelHeight + componentPaddingBottom); 
+            return (int)(componentPaddingTop() + styleInfo.trackWidth + labelSpacing() + labelHeight() + componentPaddingBottom());
+        return (int)(componentPaddingTop() + styleInfo.trackHeight + labelSpacing() + labelHeight() + componentPaddingBottom()); 
     }
     
     //==========================================================================
@@ -333,7 +364,8 @@ private:
     // MEMBER VARIABLES
     //==========================================================================
     FaderStyle faderStyle;              // The fader style for this instance
-    FaderStyleInfo styleInfo;           // Cached style info (dimensions, asset paths)
+    FaderStyleInfo styleInfo;           // Cached style info (dimensions, asset paths) - SCALED
+    float currentScaleFactor = 1.0f;    // Current UI scale factor (1.0 to 3.0)
     
     SliderModuleSlider slider;          // Custom slider that forwards double-clicks to us
     juce::Label nameLabel;              // Parameter name label (below slider)
@@ -346,6 +378,8 @@ private:
     juce::Colour valueTextColour {0xffcccccc};  /* #cccccc */ // Custom text color (light grey default)
     bool showDebugBorder = false;       // Show debug border around component bounds
     bool usePanDisplay = false;         // Use L/R pan display mode for horizontal sliders
+    bool useAttributedLabel = false;    // Use AttributedString for label instead of plain Label
+    juce::AttributedString attributedLabel;  // Rich text label (used when useAttributedLabel=true)
     
     // Text editor for manual value entry (double-click to activate)
     std::unique_ptr<juce::TextEditor> valueTextEditor;

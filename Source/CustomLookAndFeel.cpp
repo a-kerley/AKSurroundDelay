@@ -52,17 +52,19 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
     // Get accent color, dimensions, and style info from parent SliderModule (if available)
     juce::Colour tintColour = juce::Colours::white;  // Default: no tint
     FaderStyle faderStyle = FaderStyle::Fader_38x170;  // Default style
-    float trackWidth = 38.0f * SliderModule::uiScale;   // Fallback defaults (scaled)
-    float trackHeight = 170.0f * SliderModule::uiScale;
-    float thumbWidth = 34.0f * SliderModule::uiScale;   // Used for value text width
-    float thumbInset = 6.5f * SliderModule::uiScale;    // Default inset
-    float trackYOffset = 0.0f;                          // Default: no offset
+    float scaleFactor = 1.0f;  // Default scale factor
+    float trackWidth = 38.0f;   // Fallback defaults (unscaled)
+    float trackHeight = 170.0f;
+    float thumbWidth = 34.0f;   // Used for value text width
+    float thumbInset = 6.5f;    // Default inset
+    float trackYOffset = 0.0f;  // Default: no offset
     bool isHorizontal = false;
     
     if (auto* sliderModule = dynamic_cast<SliderModule*>(slider.getParentComponent()))
     {
         tintColour = sliderModule->getAccentColour();
         faderStyle = sliderModule->getFaderStyle();
+        scaleFactor = sliderModule->getScaleFactor();
         const auto& info = sliderModule->getStyleInfo();
         trackWidth = info.trackWidth;
         trackHeight = info.trackHeight;
@@ -155,14 +157,17 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
                 {
                     // Center "C" horizontally in the entire track area
                     auto centerBounds = juce::Rectangle<float> (displayX, displayY, trackHeight, trackWidth);
-                    g.setFont (juce::FontOptions (SliderModule::valueFontSize, juce::Font::bold));
+                    float fontSize = SliderModule::baseValueFontSize * scaleFactor;  // Default
+                    if (auto* sm = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+                        fontSize = sm->valueFontSize();
+                    g.setFont (juce::FontOptions (fontSize, juce::Font::plain));
                     g.drawText (dirLabel, centerBounds, juce::Justification::centred, false);
                 }
                 else
                 {
                     // Use very small font size and tight spacing for L/R + value
-                    float smallFontSize = 7.0f * SliderModule::uiScale;
-                    float lineHeight = smallFontSize + 1.0f * SliderModule::uiScale;  // Tight line height
+                    float smallFontSize = 7.0f * scaleFactor;
+                    float lineHeight = smallFontSize + 1.0f * scaleFactor;  // Tight line height
                     float totalHeight = lineHeight * 2.0f;
                     float startY = displayY + (trackWidth - totalHeight) * 0.5f;  // Center vertically
                     
@@ -194,7 +199,10 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
                     valueText = juce::String ((int)value) + suffix;
                 
                 auto textBounds = juce::Rectangle<float> (thumbX, displayY, thumbWidth, trackWidth);
-                g.setFont (juce::FontOptions (SliderModule::valueFontSize, juce::Font::bold));
+                float fontSize = SliderModule::baseValueFontSize * scaleFactor;  // Default
+                if (auto* sm = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+                    fontSize = sm->valueFontSize();
+                g.setFont (juce::FontOptions (fontSize, juce::Font::plain));
                 g.drawText (valueText, textBounds, juce::Justification::centred, false);
             }
         }
@@ -247,10 +255,15 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
             else
                 valueText = juce::String ((int)value) + suffix;
             
+            // Get per-style font size from SliderModule (already scaled)
+            float valueFontSize = SliderModule::baseValueFontSize * scaleFactor;  // Default
+            if (auto* sm = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+                valueFontSize = sm->valueFontSize();
+            
             // Calculate Y position from normalized value with per-style inset padding
             // Use trackHeight instead of height - JUCE's height includes component padding
             // Calculate track's actual Y position (centered in the component, plus any offset)
-            float textHeight = SliderModule::valueFontSize + 4.0f;  // Font size + small padding
+            float textHeight = valueFontSize + 4.0f;  // Font size + small padding
             float trackY = y + (height - trackHeight) * 0.5f + trackYOffset;  // Track center + offset
             double normValue = slider.valueToProportionOfLength (value);
             
@@ -271,11 +284,11 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
             // Compensate for font descender space - numbers/letters appear higher than visual center
             // because JUCE centers including descender area (for letters like g, y, p)
             // Shift bounds down by ~15% of font size to visually center the text
-            float descenderOffset = SliderModule::valueFontSize * 0.15f;
+            float descenderOffset = valueFontSize * 0.15f;
             textBounds = textBounds.translated (0.0f, descenderOffset);
             
             g.setColour (textColour);
-            g.setFont (juce::FontOptions (SliderModule::valueFontSize, juce::Font::bold));
+            g.setFont (juce::FontOptions (valueFontSize, juce::Font::plain));
             g.drawText (valueText, textBounds, juce::Justification::centred, false);
         }
     }

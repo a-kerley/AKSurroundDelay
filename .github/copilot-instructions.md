@@ -99,6 +99,28 @@ mixSlider.repaint();
 hueSlider.repaint();
 ```
 
+#### Dynamic UI Scaling
+SliderModules now support dynamic scaling from 1.0x to 3.0x:
+```cpp
+// Scale factor is set from parent editor
+slider.setScaleFactor (1.5f);  // 150% scale
+
+// Get current scale factor
+float scale = slider.getScaleFactor();
+
+// Preferred dimensions account for current scale
+int width = slider.getPreferredWidth();
+int height = slider.getPreferredHeight();
+```
+
+**Base constants** (at 1.0x scale) are defined as `base*` static members:
+- `baseComponentPaddingTop`, `baseComponentPaddingBottom`, etc.
+- `baseValueFontSize`, `baseLabelFontSize`
+
+**Scaled accessors** use current scale factor automatically:
+- `componentPaddingTop()`, `labelSpacing()`, `labelHeight()`
+- `valueFontSize()`, `labelFontSize()`
+
 #### Customizable Constants (SliderModule.h)
 ```cpp
 // Dimensions (match SVG assets)
@@ -122,6 +144,52 @@ static inline const juce::Colour labelTextColour {0xffaaaaaa};
 - Replaces white (#FFFFFF), black (#000000), and stroke color (#F2F2F7) with accent color
 - Smart value formatting: 0-1 range shows decimals, larger values show integers
 - Constrains thumb travel with `jlimit()` to prevent overflow (2px padding)
+
+### UI Scaling System
+The plugin window supports dynamic resizing from 1.0x to 3.0x scale with locked aspect ratio.
+
+#### Window Specifications
+- **Base size (1x)**: 1100×820 pixels
+- **Aspect ratio**: 55:41 (locked)
+- **Scale range**: 1.0x to 3.0x
+- **Scale step**: 0.1 (snapped to nearest tenth)
+- **Max size (3x)**: 3300×2460 pixels
+
+#### Key Files
+- **ResizeHandle.h**: Drag handle component for bottom-right corner
+- **UIScaling namespace**: Constants and helpers in `ResizeHandle.h`
+
+#### How It Works
+1. User drags the resize handle in bottom-right corner
+2. `ResizeHandle::onResize` callback fires with new scale factor
+3. `TapMatrixAudioProcessorEditor::setUIScaleFactorAndResize()` is called
+4. Editor saves scale to processor state (`audioProcessor.setUIScaleFactor()`)
+5. Editor calls `updateAllComponentScales()` to update all child components
+6. Editor resizes window via `setSize()`
+7. Scale factor persists with plugin state (getStateInformation/setStateInformation)
+
+#### Getting Scale Factor in Components
+```cpp
+// From within a child component
+if (auto* editor = dynamic_cast<TapMatrixAudioProcessorEditor*>(getParentComponent()))
+{
+    float scale = editor->getScaleFactor();
+}
+
+// SliderModule has built-in scale support
+slider.setScaleFactor (scale);  // Updates internal styleInfo with scaled dimensions
+float currentScale = slider.getScaleFactor();
+```
+
+#### Adding New Scalable Components
+When creating new UI components that need to scale:
+1. Add a `float currentScaleFactor = 1.0f;` member variable
+2. Add a `void setScaleFactor(float scale)` method that:
+   - Updates `currentScaleFactor`
+   - Recalculates any cached dimensions
+   - Calls `resized()` and `repaint()`
+3. Use `currentScaleFactor` to multiply all dimension constants
+4. Register the component in `updateAllComponentScales()` in the editor
 
 ## UI Style Guide
 

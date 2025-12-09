@@ -45,6 +45,15 @@ void ViewPresetSelector::setCustomState (bool custom)
     }
 }
 
+void ViewPresetSelector::setScaleFactor (float scale)
+{
+    if (currentScaleFactor != scale)
+    {
+        currentScaleFactor = scale;
+        repaint();
+    }
+}
+
 //==============================================================================
 void ViewPresetSelector::paint (juce::Graphics& g)
 {
@@ -63,7 +72,7 @@ void ViewPresetSelector::paint (juce::Graphics& g)
     g.fillRoundedRectangle (pillBounds, cornerRadius - pillPadding);
     
     // Draw segment labels
-    g.setFont (juce::Font (12.0f, juce::Font::bold));
+    g.setFont (juce::FontOptions (baseFontSize * currentScaleFactor).withStyle ("Bold"));
     
     for (int i = 0; i < numPresets; ++i)
     {
