@@ -1,6 +1,10 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include <map>
+
+// Forward declaration
+enum class FaderStyle;
 
 //==============================================================================
 /**
@@ -37,6 +41,13 @@ private:
     juce::Image sliderThumbImage;
     juce::Image knobImage;
     
+    // Per-style SVG caches (track frame only - thumb is rendered by spritesheet)
+    std::map<FaderStyle, std::unique_ptr<juce::Drawable>> trackDrawables;
+    
+    // Load SVGs for a specific style (lazy loading)
+    void ensureSVGsLoadedForStyle (FaderStyle style);
+    
+    // Legacy single-style drawables (for backward compatibility)
     std::unique_ptr<juce::Drawable> sliderTrackDrawable;
     std::unique_ptr<juce::Drawable> sliderThumbDrawable;
     

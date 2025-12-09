@@ -15,18 +15,61 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Setup view preset selector
     setupViewPresetSelector();
     
-    // Setup mix slider
-    mixSlider.getSlider().setLookAndFeel (&customLookAndFeel);
-    mixSlider.attachToParameter (p.getParameters(), "mix");
-    mixSlider.setShowDebugBorder (true);  // Enable debug border
-    addAndMakeVisible (mixSlider);
+    // Setup test sliders - one of each style with independent parameters
+    // Debug borders enabled for testing
+    
+    // 38x170 - Standard vertical fader (default) - Mix parameter
+    slider_38x170.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_38x170.attachToParameter (p.getParameters(), "mix");
+    slider_38x170.setLabelText ("MIX");
+    slider_38x170.setShowDebugBorder (true);
+    addAndMakeVisible (slider_38x170);
+    
+    // 22x170 - Slim vertical fader - Output Gain
+    slider_22x170.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_22x170.attachToParameter (p.getParameters(), "outputGain");
+    slider_22x170.setLabelText ("OUT");
+    slider_22x170.setValueSuffix ("dB");
+    slider_22x170.setShowDebugBorder (true);
+    addAndMakeVisible (slider_22x170);
+    
+    // 32x129 - Medium vertical fader - Tap 1 Gain
+    slider_32x129.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_32x129.attachToParameter (p.getParameters(), "gain1");
+    slider_32x129.setLabelText ("TAP 1");
+    slider_32x129.setValueSuffix ("dB");
+    slider_32x129.setShowDebugBorder (true);
+    addAndMakeVisible (slider_32x129);
+    
+    // 32x129 Front-Back - Medium fader - Tap 1 Pan Y (Front/Back)
+    slider_32x129FB.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_32x129FB.attachToParameter (p.getParameters(), "panY1");
+    slider_32x129FB.setLabelText ("F/B");
+    slider_32x129FB.setShowDebugBorder (true);
+    addAndMakeVisible (slider_32x129FB);
+    
+    // 22x79 - Small vertical fader - Tap 1 Feedback
+    slider_22x79.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_22x79.attachToParameter (p.getParameters(), "feedback1");
+    slider_22x79.setLabelText ("FDBK");
+    slider_22x79.setShowDebugBorder (true);
+    addAndMakeVisible (slider_22x79);
+    
+    // 28x84 Horizontal - L/R Pan fader - Tap 1 Pan X
+    slider_28x84H.getSlider().setLookAndFeel (&customLookAndFeel);
+    slider_28x84H.attachToParameter (p.getParameters(), "panX1");
+    slider_28x84H.setLabelText ("L/R");
+    slider_28x84H.setUsePanDisplay (true);  // Enable L/R pan display mode
+    slider_28x84H.setShowDebugBorder (true);
+    addAndMakeVisible (slider_28x84H);
     
     // Setup hue slider (for testing color system)
     hueSlider.getSlider().setLookAndFeel (&customLookAndFeel);
     hueSlider.attachToParameter (p.getParameters(), "hue");
+    hueSlider.setLabelText ("HUE");
     hueSlider.setInterval (1.0);  // Discrete steps: 0, 1, 2, ..., 9 (10 colors)
     hueSlider.getSlider().onValueChange = [this]() { updateSliderColors(); };
-    hueSlider.setShowDebugBorder (true);  // Enable debug border
+    hueSlider.setShowDebugBorder (true);
     addAndMakeVisible (hueSlider);
     
     // Initialize slider colors based on default hue value
@@ -35,8 +78,8 @@ TapMatrixAudioProcessorEditor::TapMatrixAudioProcessorEditor (TapMatrixAudioProc
     // Start timer to sync view preset state (30 FPS is enough for UI sync)
     startTimerHz (30);
     
-    // Set plugin window size (600 viewport + 200 controls + padding)
-    setSize (820, 600);
+    // Set plugin window size (wider to accommodate all test sliders)
+    setSize (1000, 700);
 }
 
 TapMatrixAudioProcessorEditor::~TapMatrixAudioProcessorEditor()
@@ -79,18 +122,42 @@ void TapMatrixAudioProcessorEditor::resized()
     selectorArea = selectorArea.withSizeKeepingCentre (selectorWidth, selectorHeight);
     viewPresetSelector.setBounds (selectorArea);
     
-    // Right side: sliders
+    // Right side: test sliders
     auto controlsArea = bounds;
     controlsArea.reduce (padding, padding);
     
-    int sliderWidth = SliderModule::getIdealWidth();
-    int sliderHeight = SliderModule::getIdealHeight();
-    int centerY = controlsArea.getCentreY();
-    int sliderX = controlsArea.getCentreX() - sliderWidth / 2;
+    // Layout all sliders in a row at the top
+    int sliderSpacing = 10;
+    int xPos = controlsArea.getX();
+    int yPos = controlsArea.getY();
     
-    // Stack sliders vertically on right side
-    mixSlider.setBounds (sliderX - 40, centerY - sliderHeight - 10, sliderWidth, sliderHeight);
-    hueSlider.setBounds (sliderX + 40, centerY - sliderHeight - 10, sliderWidth, sliderHeight);
+    // Row 1: Vertical sliders of varying heights
+    // 38x170 (standard)
+    slider_38x170.setBounds (xPos, yPos, slider_38x170.getPreferredWidth(), slider_38x170.getPreferredHeight());
+    xPos += slider_38x170.getPreferredWidth() + sliderSpacing;
+    
+    // 22x170 (slim)
+    slider_22x170.setBounds (xPos, yPos, slider_22x170.getPreferredWidth(), slider_22x170.getPreferredHeight());
+    xPos += slider_22x170.getPreferredWidth() + sliderSpacing;
+    
+    // 32x129 (medium)
+    slider_32x129.setBounds (xPos, yPos, slider_32x129.getPreferredWidth(), slider_32x129.getPreferredHeight());
+    xPos += slider_32x129.getPreferredWidth() + sliderSpacing;
+    
+    // 32x129 Front-Back
+    slider_32x129FB.setBounds (xPos, yPos, slider_32x129FB.getPreferredWidth(), slider_32x129FB.getPreferredHeight());
+    xPos += slider_32x129FB.getPreferredWidth() + sliderSpacing;
+    
+    // 22x79 (small)
+    slider_22x79.setBounds (xPos, yPos, slider_22x79.getPreferredWidth(), slider_22x79.getPreferredHeight());
+    xPos += slider_22x79.getPreferredWidth() + sliderSpacing;
+    
+    // Hue slider (38x170) - last in row
+    hueSlider.setBounds (xPos, yPos, hueSlider.getPreferredWidth(), hueSlider.getPreferredHeight());
+    
+    // Row 2: Horizontal slider below
+    int row2Y = yPos + slider_38x170.getPreferredHeight() + 20;
+    slider_28x84H.setBounds (controlsArea.getX(), row2Y, slider_28x84H.getPreferredWidth(), slider_28x84H.getPreferredHeight());
 }
 
 void TapMatrixAudioProcessorEditor::setupViewPresetSelector()
@@ -123,14 +190,35 @@ void TapMatrixAudioProcessorEditor::updateSliderColors()
     auto colour = colorPair.background;
     auto textColour = colorPair.text;
     
-    // Apply to both sliders
-    mixSlider.setAccentColour (colour);
-    mixSlider.setValueTextColour (textColour);
+    // Apply to all test sliders
+    slider_38x170.setAccentColour (colour);
+    slider_38x170.setValueTextColour (textColour);
+    
+    slider_22x170.setAccentColour (colour);
+    slider_22x170.setValueTextColour (textColour);
+    
+    slider_32x129.setAccentColour (colour);
+    slider_32x129.setValueTextColour (textColour);
+    
+    slider_32x129FB.setAccentColour (colour);
+    slider_32x129FB.setValueTextColour (textColour);
+    
+    slider_22x79.setAccentColour (colour);
+    slider_22x79.setValueTextColour (textColour);
+    
+    slider_28x84H.setAccentColour (colour);
+    slider_28x84H.setValueTextColour (textColour);
+    
     hueSlider.setAccentColour (colour);
     hueSlider.setValueTextColour (textColour);
     
-    // Force repaint of sliders
-    mixSlider.repaint();
+    // Force repaint of all sliders
+    slider_38x170.repaint();
+    slider_22x170.repaint();
+    slider_32x129.repaint();
+    slider_32x129FB.repaint();
+    slider_22x79.repaint();
+    slider_28x84H.repaint();
     hueSlider.repaint();
     repaint();
 }

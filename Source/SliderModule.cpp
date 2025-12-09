@@ -1,16 +1,191 @@
 #include "SliderModule.h"
 #include "ColorPalette.h"
 
-// Static member initialization
-juce::Image SliderModule::fillBarImage;
-bool SliderModule::fillBarImageLoaded = false;
-std::map<int, juce::Image> SliderModule::colorVariants;
-bool SliderModule::colorVariantsLoaded = false;
-
-SliderModule::SliderModule (const juce::String& labelText)
+//==============================================================================
+// CUSTOM SLIDER - Forwards double-clicks to parent SliderModule
+//==============================================================================
+void SliderModuleSlider::mouseDoubleClick (const juce::MouseEvent& event)
 {
-    // Setup slider
-    slider.setSliderStyle (juce::Slider::LinearVertical);
+    // Don't call base class - we handle double-click ourselves
+    // Forward to parent SliderModule to show text editor
+    if (parentModule != nullptr)
+        parentModule->mouseDoubleClick (event);
+}
+
+void SliderModuleSlider::mouseDown (const juce::MouseEvent& event)
+{
+    // If text editor is open, dismiss it first
+    if (parentModule != nullptr && parentModule->isTextEditorActive())
+    {
+        parentModule->dismissTextEditor (true);  // Commit value
+        return;  // Don't start dragging on this click
+    }
+    
+    // Otherwise, proceed with normal slider behavior
+    juce::Slider::mouseDown (event);
+}
+
+//==============================================================================
+// STATIC MEMBER INITIALIZATION
+// Shared sprite caches - loaded once per style, shared across all instances
+//==============================================================================
+std::map<FaderStyle, juce::Image> SliderModule::fillBarImages;        // Base spritesheet per style
+std::map<FaderStyle, bool> SliderModule::fillBarImagesLoaded;         // Load status flags
+std::map<std::pair<FaderStyle, int>, juce::Image> SliderModule::colorVariants;  // Pre-tinted variants (style, colorIndex)
+std::map<FaderStyle, bool> SliderModule::colorVariantsLoaded;         // Color variant load status
+
+//==============================================================================
+// FADER STYLE INFO LOOKUP
+//
+// Returns dimensions and asset info for each fader style.
+// All dimensions are multiplied by uiScale for consistent scaling.
+//
+// SPRITESHEET NOTES:
+// - All PNGs are rendered at 4x resolution for crisp Retina display
+// - spritesheetFrameWidth/Height are the 4x values from the PNG
+// - Divide by 4 to get display size (which should match trackWidth/trackHeight)
+// - Total PNG height = spritesheetTotalFrames × spritesheetFrameHeight
+//
+// Example for Fader_38x170:
+//   Track: 38×170 display pixels
+//   PNG: 152×680 per frame (4x), 170 frames stacked = 152×115600 total
+//==============================================================================
+FaderStyleInfo SliderModule::getStyleInfo (FaderStyle style)
+{
+    constexpr float s = uiScale;  // Shorthand for scaling
+    
+    // Return format: { trackW, trackH, thumbW, thumbH, thumbInset, frames, frameW@4x, frameH@4x, folder, isHoriz }
+    switch (style)
+    {
+        case FaderStyle::Fader_38x170:
+            // STANDARD VERTICAL FADER (default size)
+            // Display size: 38×170 pixels
+            // Spritesheet: 152×680 per frame (4x), 170 frames total (one per pixel of travel)
+            // PNG total: 152 × 115600 (170 × 680)
+            return { 38.0f * s,   // trackWidth
+                     170.0f * s,  // trackHeight
+                     34.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     170,         // frames (= trackHeight in pixels, one frame per position)
+                     152, 680,    // frameWidth, frameHeight at 4x resolution
+                     "Fader 38 x 170", false,
+                     38.0f * s,   // textEditorWidth
+                     4.0f * s };  // textEditorPadding
+            
+        case FaderStyle::Fader_32x129:
+            // MEDIUM VERTICAL FADER
+            // Display size: 32×129 pixels
+            // Spritesheet: 128×516 per frame (4x), 129 frames total
+            // PNG total: 128 × 66564 (129 × 516)
+            return { 32.0f * s,   // trackWidth
+                     129.0f * s,  // trackHeight
+                     28.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     129,         // frames (= trackHeight in pixels)
+                     128, 516,    // frameWidth, frameHeight at 4x resolution
+                     "Fader 32 x 129", false,
+                     32.0f * s,   // textEditorWidth
+                     3.0f * s };  // textEditorPadding
+            
+        case FaderStyle::Fader_32x129_FrontBack:
+            // MEDIUM VERTICAL with "FRONT"/"BACK" labels printed on track SVG
+            // Display size: 32×129 pixels (same as Fader_32x129)
+            // Spritesheet: 128×516 per frame (4x), 129 frames total
+            // PNG total: 128 × 66564 (129 × 516)
+            return { 32.0f * s,   // trackWidth
+                     129.0f * s,  // trackHeight
+                     28.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     129,         // frames (= trackHeight in pixels)
+                     128, 516,    // frameWidth, frameHeight at 4x resolution
+                     "Fader 32 x 129 Front-Back", false,
+                     32.0f * s,   // textEditorWidth
+                     3.0f * s };  // textEditorPadding
+            
+        case FaderStyle::Fader_28x84_HorizontalLeftRight:
+            // HORIZONTAL FADER with "L"/"R" labels
+            // Display size: 28px tall × 84px wide (width = travel direction)
+            // Note: For horizontal, trackWidth = height, trackHeight = width (travel)
+            // Spritesheet: 336×112 per frame (4x), 84 frames total
+            // PNG total: 336 × 9408 (84 × 112)
+            return { 28.0f * s,   // trackWidth (displayed as height for horizontal)
+                     84.0f * s,   // trackHeight (displayed as width, travel direction)
+                     13.0f * s,   // thumbWidth
+                     24.0f * s,   // thumbHeight
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     0.0f * s,    // trackXOffset - nudge track left(-) or right(+)
+                     84,          // frames (= travel distance in pixels)
+                     336, 112,    // frameWidth, frameHeight at 4x resolution
+                     "Fader 28 x 84 Horizontal Left-Right", true,
+                     40.0f * s,   // textEditorWidth (wider for horizontal)
+                     4.0f * s };  // textEditorPadding
+            
+        case FaderStyle::Fader_22x170:
+            // SLIM VERTICAL FADER (tall, narrow)
+            // Display size: 22×170 pixels
+            // Spritesheet: 88×680 per frame (4x), 170 frames total
+            // PNG total: 88 × 115600 (170 × 680)
+            return { 22.0f * s,   // trackWidth
+                     170.0f * s,  // trackHeight
+                     18.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     170,         // frames (= trackHeight in pixels)
+                     88, 680,     // frameWidth, frameHeight at 4x resolution
+                     "Fader 22 x 170", false,
+                     26.0f * s,   // textEditorWidth (wider than track for usability)
+                     2.0f * s };  // textEditorPadding
+            
+        case FaderStyle::Fader_22x79:
+            // SMALL VERTICAL FADER (compact)
+            // Display size: 22×79 pixels
+            // Spritesheet: 88×316 per frame (4x), 79 frames total
+            // PNG total: 88 × 24964 (79 × 316)
+            return { 22.0f * s,   // trackWidth
+                     79.0f * s,   // trackHeight
+                     18.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     79,          // frames (= trackHeight in pixels)
+                     88, 316,     // frameWidth, frameHeight at 4x resolution
+                     "Fader 22 x 79", false,
+                     26.0f * s,   // textEditorWidth (wider than track for usability)
+                     2.0f * s };  // textEditorPadding
+            
+        default:
+            // Fallback to standard 38×170 size
+            return { 38.0f * s,   // trackWidth
+                     170.0f * s,  // trackHeight
+                     34.0f * s,   // thumbWidth (SVG thumb, not used for vertical)
+                     13.0f * s,   // thumbHeight (affects value text height)
+                     2.5f * s,    // thumbInset - keeps value text away from track edges
+                     -2.0f * s,   // trackYOffset - nudge track up(-) or down(+)
+                     170,         // frames (= trackHeight in pixels)
+                     152, 680,    // frameWidth, frameHeight at 4x resolution
+                     "Fader 38 x 170", false,
+                     38.0f * s,   // textEditorWidth
+                     4.0f * s };  // textEditorPadding
+    }
+}
+
+SliderModule::SliderModule (const juce::String& labelText, FaderStyle style)
+    : faderStyle (style), styleInfo (getStyleInfo (style))
+{
+    // Disable clipping so labels can extend beyond component bounds
+    setInterceptsMouseClicks (true, true);
+    setPaintingIsUnclipped (true);
+    
+    // Setup slider - use horizontal style for horizontal faders
+    slider.setParentModule (this);  // Allow slider to forward double-clicks to us
+    slider.setSliderStyle (styleInfo.isHorizontal ? juce::Slider::LinearHorizontal : juce::Slider::LinearVertical);
     slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);  // No text box - value shown in thumb
     slider.setColour (juce::Slider::backgroundColourId, juce::Colours::transparentBlack);
     slider.setColour (juce::Slider::trackColourId, juce::Colours::transparentBlack);
@@ -19,7 +194,8 @@ SliderModule::SliderModule (const juce::String& labelText)
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setRange (0.0, 1.0, 0.001); // Finer step for smoother animation (was 0.01)
     slider.setValue (0.5, juce::dontSendNotification); // Set default value
-    slider.setDoubleClickReturnValue (true, 0.5);  // Cmd+click resets to default (0.5)
+    slider.setDoubleClickReturnValue (false, 0.5);  // Disable JUCE's built-in double-click (we handle it ourselves)
+    slider.setSliderSnapsToMousePosition (false);  // Use relative dragging instead of jumping to click position
     addAndMakeVisible (slider);
     
     // Setup name label (below slider)
@@ -28,8 +204,10 @@ SliderModule::SliderModule (const juce::String& labelText)
     {
         nameLabel.setText (labelText, juce::dontSendNotification);
         nameLabel.setFont (juce::FontOptions (labelFontSize));
-        nameLabel.setJustificationType (juce::Justification::centred);
+        nameLabel.setJustificationType (juce::Justification::centredTop);  // Top-align to prevent stretching
         nameLabel.setColour (juce::Label::textColourId, labelTextColour);
+        nameLabel.setMinimumHorizontalScale (1.0f);  // Don't squash text horizontally
+        nameLabel.setInterceptsMouseClicks (false, false);  // Allow clicks to pass through
         addAndMakeVisible (nameLabel);
     }
     
@@ -39,24 +217,8 @@ SliderModule::SliderModule (const juce::String& labelText)
         repaint();  // Repaint to update fill bar position
     };
     
-    // Load fill bar spritesheet once (shared by all SliderModule instances)
-    if (!fillBarImageLoaded)
-    {
-        auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
-        auto fillBarFile = assetsPath.getChildFile ("SliderFill_spritesheet_withthumb.png");
-        
-        if (fillBarFile.existsAsFile())
-        {
-            fillBarImage = juce::ImageCache::getFromFile (fillBarFile);
-            if (!fillBarImage.isNull())
-            {
-                fillBarImageLoaded = true;
-                
-                // Load color variants
-                loadColorVariants();
-            }
-        }
-    }
+    // Load fill bar spritesheet for this style (shared by all instances of same style)
+    loadFillBarForStyle();
 }
 
 SliderModule::~SliderModule()
@@ -89,18 +251,58 @@ void SliderModule::setLabelText (const juce::String& text)
     nameLabel.setText (text, juce::dontSendNotification);
 }
 
-void SliderModule::loadColorVariants()
+void SliderModule::setUsePanDisplay (bool usePan)
 {
-    if (colorVariantsLoaded)
+    usePanDisplay = usePan;
+    
+    // For horizontal pan sliders, we need to handle the slider direction
+    // The default horizontal slider has left=min, right=max which is correct for L/R pan
+    // where negative values = Left, positive values = Right
+    // No inversion needed - the spritesheet animation handles the visual
+}
+
+void SliderModule::loadFillBarForStyle()
+{
+    // Check if already loaded for this style
+    if (fillBarImagesLoaded[faderStyle])
         return;
     
-    auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
+    auto assetsPath = juce::File (getAssetsBasePath());
+    auto stylePath = assetsPath.getChildFile (styleInfo.folderName);
+    auto fillBarFile = stylePath.getChildFile (styleInfo.folderName + "_sprite_sheet.png");
+    
+    if (fillBarFile.existsAsFile())
+    {
+        auto image = juce::ImageCache::getFromFile (fillBarFile);
+        if (!image.isNull())
+        {
+            fillBarImages[faderStyle] = image;
+            fillBarImagesLoaded[faderStyle] = true;
+            
+            // Load color variants for this style
+            loadColorVariantsForStyle();
+        }
+    }
+    else
+    {
+        DBG ("ERROR: Fill bar spritesheet not found: " + fillBarFile.getFullPathName());
+    }
+}
+
+void SliderModule::loadColorVariantsForStyle()
+{
+    // Check if already loaded for this style
+    if (colorVariantsLoaded[faderStyle])
+        return;
+    
+    auto assetsPath = juce::File (getAssetsBasePath());
+    auto stylePath = assetsPath.getChildFile (styleInfo.folderName);
     
     // Check if cache files exist - if not, generate them first
     bool cacheExists = true;
     for (int i = 0; i < 10; ++i)
     {
-        auto variantFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        auto variantFile = stylePath.getChildFile (styleInfo.folderName + "_color" + juce::String(i) + ".png");
         if (!variantFile.existsAsFile())
         {
             cacheExists = false;
@@ -109,53 +311,49 @@ void SliderModule::loadColorVariants()
     }
     
     if (!cacheExists)
-        generateColorVariantCache();
+        generateColorVariantCacheForStyle();
     
     // Load each pre-cached color variant PNG file
     for (int i = 0; i < 10; ++i)
     {
-        auto variantFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        auto variantFile = stylePath.getChildFile (styleInfo.folderName + "_color" + juce::String(i) + ".png");
         
         if (variantFile.existsAsFile())
         {
             auto variantImage = juce::ImageCache::getFromFile (variantFile);
             if (!variantImage.isNull())
-                colorVariants[i] = variantImage;
+                colorVariants[{faderStyle, i}] = variantImage;
         }
     }
     
-    colorVariantsLoaded = true;
+    colorVariantsLoaded[faderStyle] = true;
 }
 
-void SliderModule::generateColorVariantCache()
+void SliderModule::generateColorVariantCacheForStyle()
 {
     // Get palette colors from central definition
     auto paletteColors = ColorPalette::getBackgroundColors();
     
-    // Ensure fill bar is loaded
-    if (fillBarImage.isNull())
+    // Ensure fill bar is loaded for this style
+    auto it = fillBarImages.find (faderStyle);
+    if (it == fillBarImages.end() || it->second.isNull())
     {
-        auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
-        auto fillBarFile = assetsPath.getChildFile ("SliderFill_spritesheet_withthumb.png");
-        if (fillBarFile.existsAsFile())
-            fillBarImage = juce::ImageCache::getFromFile (fillBarFile);
-    }
-    
-    if (!fillBarImage.isValid())
-    {
-        DBG ("ERROR: Cannot generate color variants - source image not found");
+        DBG ("ERROR: Cannot generate color variants - source image not loaded for style: " + styleInfo.folderName);
         return;
     }
     
-    auto assetsPath = juce::File ("/Users/alistairkerley/Documents/xCode Developments/AKSurroundDelay/assets");
+    const auto& sourceImage = it->second;
+    
+    auto assetsPath = juce::File (getAssetsBasePath());
+    auto stylePath = assetsPath.getChildFile (styleInfo.folderName);
     
     // Generate tinted variants for each palette color and save as PNG
-    for (int i = 0; i < paletteColors.size(); ++i)
+    for (size_t i = 0; i < paletteColors.size(); ++i)
     {
         auto colour = paletteColors[i];
         
         // Clone and tint the spritesheet
-        auto tintedImage = fillBarImage.createCopy();
+        auto tintedImage = sourceImage.createCopy();
         
         // Fast color multiplication using BitmapData
         juce::Image::BitmapData bitmapData (tintedImage, juce::Image::BitmapData::readWrite);
@@ -180,18 +378,19 @@ void SliderModule::generateColorVariantCache()
         }
         
         // Save as PNG file
-        auto outputFile = assetsPath.getChildFile ("SliderFill_color" + juce::String(i) + ".png");
+        auto outputFile = stylePath.getChildFile (styleInfo.folderName + "_color" + juce::String(i) + ".png");
         juce::FileOutputStream outputStream (outputFile);
         
         if (outputStream.openedOk())
         {
             juce::PNGImageFormat pngFormat;
             pngFormat.writeImageToStream (tintedImage, outputStream);
+            DBG ("Generated color variant: " + outputFile.getFullPathName());
         }
     }
 }
 
-const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour)
+const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour) const
 {
     // Get palette colors from central definition
     auto paletteColors = ColorPalette::getBackgroundColors();
@@ -200,7 +399,7 @@ const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour)
     int closestIndex = 0;
     float minDistance = std::numeric_limits<float>::max();
     
-    for (int i = 0; i < paletteColors.size(); ++i)
+    for (size_t i = 0; i < paletteColors.size(); ++i)
     {
         // Simple color distance using RGB euclidean distance
         float dr = colour.getFloatRed() - paletteColors[i].getFloatRed();
@@ -211,66 +410,100 @@ const juce::Image& SliderModule::getVariantForColor (const juce::Colour& colour)
         if (distance < minDistance)
         {
             minDistance = distance;
-            closestIndex = i;
+            closestIndex = (int)i;
         }
     }
     
-    // Look up the variant
-    auto it = colorVariants.find (closestIndex);
+    // Look up the variant for this fader style
+    auto it = colorVariants.find ({faderStyle, closestIndex});
     if (it != colorVariants.end())
         return it->second;
     
     // Fallback to original grayscale if variant not found
-    return fillBarImage;
+    auto fillIt = fillBarImages.find (faderStyle);
+    if (fillIt != fillBarImages.end())
+        return fillIt->second;
+    
+    // Ultimate fallback - return empty static image
+    static juce::Image emptyImage;
+    return emptyImage;
 }
 
 void SliderModule::paint (juce::Graphics& g)
 {
-    // Draw fill bar behind the slider using spritesheet frames
-    if (!fillBarImage.isNull())
+    // Get the fill bar image for this style
+    auto fillIt = fillBarImages.find (faderStyle);
+    if (fillIt == fillBarImages.end() || fillIt->second.isNull())
+        return;  // No spritesheet loaded for this style
+    
+    // Get slider bounds
+    auto sliderBounds = slider.getBounds();
+    
+    // Calculate which frame to display based on slider value
+    double sliderValue = slider.getValue();
+    double minValue = slider.getMinimum();
+    double maxValue = slider.getMaximum();
+    
+    // Normalize value to 0-1 range (works for any slider range)
+    float normalizedValue = (float)((sliderValue - minValue) / (maxValue - minValue));
+    
+    // Safety check - clamp to valid range
+    if (!std::isfinite(normalizedValue))
+        return;  // Skip drawing if value is invalid
+    
+    normalizedValue = juce::jlimit (0.0f, 1.0f, normalizedValue);
+    
+    // Calculate frame index based on slider orientation
+    int totalFrames = styleInfo.spritesheetTotalFrames;
+    int frameIndex;
+    
+    if (styleInfo.isHorizontal)
     {
-        // Get slider bounds
-        auto sliderBounds = slider.getBounds();
-        
-        // Calculate which frame to display based on slider value
-        double sliderValue = slider.getValue();
-        double minValue = slider.getMinimum();
-        double maxValue = slider.getMaximum();
-        
-        // Normalize value to 0-1 range (works for any slider range)
-        float normalizedValue = (float)((sliderValue - minValue) / (maxValue - minValue));
-        
-        // Safety check - clamp to valid range
-        if (!std::isfinite(normalizedValue))
-            return;  // Skip drawing if value is invalid
-        
-        normalizedValue = juce::jlimit (0.0f, 1.0f, normalizedValue);
-        
-        // Calculate frame index (0 to 169)
-        // Spritesheet is reversed: Frame 0 = full (value 1.0), Frame 169 = empty (value 0.0)
-        // So we need to invert the index
-        // Use roundToInt() instead of (int) cast for smoother frame selection
-        int frameIndex = juce::jlimit (0, spritesheetTotalFrames - 1, 
-                                       juce::roundToInt ((1.0f - normalizedValue) * (spritesheetTotalFrames - 1)));
-        
-        // Calculate source Y position in the spritesheet
-        // Frames are stacked vertically from top (frame 0) to bottom (frame 169)
-        int srcY = frameIndex * spritesheetFrameHeight;
-        
-        // Destination bounds (scale down from 4x to 1x)
-        float fillX = sliderBounds.getX();
-        float fillY = sliderBounds.getY();
-        
-        // Enable high-quality resampling for smooth 4x downscaling
-        g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
-        
-        // Get the pre-tinted variant for this slider's accent color (instant lookup!)
-        const auto& spritesheetToUse = getVariantForColor (accentColour);
-        
-        // Draw the pre-tinted spritesheet frame
+        // Horizontal slider: Frame 0 = left (value 0.0/min), Last frame = right (value 1.0/max)
+        // For L/R pan: -1 = left, 0 = center, +1 = right
+        // normalizedValue 0.0 = left, 0.5 = center, 1.0 = right
+        frameIndex = juce::jlimit (0, totalFrames - 1, 
+                                   juce::roundToInt (normalizedValue * (totalFrames - 1)));
+    }
+    else
+    {
+        // Vertical slider: Spritesheet is reversed - Frame 0 = full (value 1.0), Last frame = empty (value 0.0)
+        frameIndex = juce::jlimit (0, totalFrames - 1, 
+                                   juce::roundToInt ((1.0f - normalizedValue) * (totalFrames - 1)));
+    }
+    
+    // Calculate source Y position in the spritesheet
+    // Frames are stacked vertically from top (frame 0) to bottom (last frame)
+    int srcY = frameIndex * styleInfo.spritesheetFrameHeight;
+    
+    // Destination bounds (scale down from 4x to 1x)
+    float fillX = (float)sliderBounds.getX();
+    float fillY = (float)sliderBounds.getY();
+    
+    // Enable high-quality resampling for smooth 4x downscaling
+    g.setImageResamplingQuality (juce::Graphics::highResamplingQuality);
+    
+    // Get the pre-tinted variant for this slider's accent color (instant lookup!)
+    const auto& spritesheetToUse = getVariantForColor (accentColour);
+    
+    // Draw the pre-tinted spritesheet frame
+    // For horizontal sliders: display width = trackHeight (travel), display height = trackWidth (short)
+    // For vertical sliders: display width = trackWidth, display height = trackHeight
+    if (styleInfo.isHorizontal)
+    {
+        // Horizontal slider: trackHeight is the travel dimension (84), trackWidth is short dimension (28)
+        // Display as: 84 wide × 28 tall
         g.drawImage (spritesheetToUse,
-                    (int)fillX, (int)fillY, (int)trackWidth, (int)trackHeight,
-                    0, srcY, spritesheetFrameWidth, spritesheetFrameHeight,
+                    (int)fillX, (int)fillY, (int)styleInfo.trackHeight, (int)styleInfo.trackWidth,
+                    0, srcY, styleInfo.spritesheetFrameWidth, styleInfo.spritesheetFrameHeight,
+                    false);
+    }
+    else
+    {
+        // Vertical slider: normal orientation
+        g.drawImage (spritesheetToUse,
+                    (int)fillX, (int)fillY, (int)styleInfo.trackWidth, (int)styleInfo.trackHeight,
+                    0, srcY, styleInfo.spritesheetFrameWidth, styleInfo.spritesheetFrameHeight,
                     false);
     }
     
@@ -297,7 +530,218 @@ void SliderModule::resized()
     nameLabel.setBounds (bounds.removeFromBottom ((int)labelHeight));
     bounds.removeFromBottom ((int)labelSpacing);  // Add spacing gap
     
-    // Slider at full track height - padding is applied in CustomLookAndFeel
-    auto sliderBounds = bounds.withSizeKeepingCentre ((int)trackWidth, (int)trackHeight);
+    // Slider dimensions - for horizontal, swap width and height
+    int sliderWidth, sliderHeight;
+    if (styleInfo.isHorizontal)
+    {
+        // Horizontal slider: trackHeight is travel (wide), trackWidth is short (tall)
+        sliderWidth = (int)styleInfo.trackHeight;
+        sliderHeight = (int)styleInfo.trackWidth;
+    }
+    else
+    {
+        sliderWidth = (int)styleInfo.trackWidth;
+        sliderHeight = (int)styleInfo.trackHeight;
+    }
+    
+    auto sliderBounds = bounds.withSizeKeepingCentre (sliderWidth, sliderHeight);
     slider.setBounds (sliderBounds);
+}
+
+//==============================================================================
+// MOUSE EVENTS - Double-click to edit, Cmd-click to reset
+//==============================================================================
+
+void SliderModule::mouseDoubleClick (const juce::MouseEvent& event)
+{
+    // Double-click anywhere on the slider module opens text editor for manual value entry
+    if (!event.mods.isCommandDown())
+    {
+        showTextEditor();
+    }
+}
+
+void SliderModule::mouseDown (const juce::MouseEvent& event)
+{
+    // If text editor is open and click is outside it, close it
+    // This handles clicks both within and outside this component's bounds
+    // (we listen to the top-level component when text editor is open)
+    if (isEditingValue && valueTextEditor != nullptr)
+    {
+        // Convert click position to our coordinate space
+        auto clickPos = event.getEventRelativeTo (this).getPosition();
+        
+        // Check if click is outside the text editor
+        if (!valueTextEditor->getBounds().contains (clickPos))
+        {
+            hideTextEditor (true);  // Commit value when clicking outside
+            return;
+        }
+    }
+    
+    // Cmd+click (Mac) or Ctrl+click (Windows/Linux) resets to default value
+    if (event.mods.isCommandDown())
+    {
+        // Get the parameter's default value if attached, otherwise use 0.5
+        if (attachment != nullptr)
+        {
+            // Use the slider's double-click return value as the default
+            slider.setValue (slider.getDoubleClickReturnValue(), juce::sendNotificationSync);
+        }
+        else
+        {
+            slider.setValue (0.5, juce::sendNotificationSync);
+        }
+        return;
+    }
+    
+    // Otherwise, pass the event to the slider
+    // (This allows normal drag behavior to work)
+}
+
+//==============================================================================
+// TEXT EDITOR - Manual value entry via double-click
+//==============================================================================
+
+void SliderModule::showTextEditor()
+{
+    if (isEditingValue)
+        return;
+    
+    isEditingValue = true;
+    
+    // Create the text editor if it doesn't exist
+    if (valueTextEditor == nullptr)
+    {
+        valueTextEditor = std::make_unique<juce::TextEditor>();
+        valueTextEditor->setMultiLine (false);
+        valueTextEditor->setReturnKeyStartsNewLine (false);
+        valueTextEditor->setScrollbarsShown (false);
+        valueTextEditor->setCaretVisible (true);
+        valueTextEditor->setPopupMenuEnabled (false);
+        valueTextEditor->setJustification (juce::Justification::centred);
+        valueTextEditor->setFont (juce::FontOptions (valueFontSize));
+        valueTextEditor->setIndents (0, 0);  // Remove internal padding for better vertical centering
+        valueTextEditor->setBorder (juce::BorderSize<int> (0));  // No internal border
+        valueTextEditor->setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff2a2a2a)); /* #2a2a2a */
+        valueTextEditor->setColour (juce::TextEditor::textColourId, juce::Colours::white);
+        valueTextEditor->setSelectAllWhenFocused (true);
+        
+        // Set up callbacks for enter and escape keys
+        valueTextEditor->onReturnKey = [this]() { textEditorReturnKeyPressed(); };
+        valueTextEditor->onEscapeKey = [this]() { textEditorEscapeKeyPressed(); };
+        valueTextEditor->onFocusLost = [this]() { textEditorFocusLost(); };
+        
+        addAndMakeVisible (*valueTextEditor);
+    }
+    
+    // Update border color to match current accent color
+    valueTextEditor->setColour (juce::TextEditor::outlineColourId, accentColour);
+    valueTextEditor->setColour (juce::TextEditor::focusedOutlineColourId, accentColour);
+    
+    // Calculate position to match the value label position (same as CustomLookAndFeel)
+    auto sliderBounds = slider.getBounds();
+    double value = slider.getValue();
+    double normValue = slider.valueToProportionOfLength (value);
+    
+    // Text editor dimensions
+    // Height: font size + vertical padding for text + border space
+    float editorHeight = valueFontSize + 10.0f;
+    
+    // Width: use per-style configured width
+    float editorWidth = styleInfo.textEditorWidth;
+    
+    float editorX, editorY;
+    
+    if (styleInfo.isHorizontal)
+    {
+        // Horizontal slider: position at thumb X
+        float displayX = sliderBounds.getX() + (sliderBounds.getWidth() - styleInfo.trackHeight) * 0.5f;
+        float displayY = sliderBounds.getY() + (sliderBounds.getHeight() - styleInfo.trackWidth) * 0.5f;
+        
+        float halfThumb = styleInfo.thumbWidth * 0.5f;
+        float travelLeft = displayX + styleInfo.thumbInset + halfThumb;
+        float travelRight = displayX + styleInfo.trackHeight - styleInfo.thumbInset - halfThumb;
+        float travelRange = travelRight - travelLeft;
+        float thumbCenterX = travelLeft + ((float)normValue * travelRange) + styleInfo.trackYOffset;
+        
+        editorX = thumbCenterX - editorWidth * 0.5f;
+        editorY = displayY + (styleInfo.trackWidth - editorHeight) * 0.5f;
+    }
+    else
+    {
+        // Vertical slider: position at value label Y (same calculation as CustomLookAndFeel)
+        float textHeight = valueFontSize + 4.0f;
+        float trackY = sliderBounds.getY() + (sliderBounds.getHeight() - styleInfo.trackHeight) * 0.5f + styleInfo.trackYOffset;
+        
+        float halfText = textHeight * 0.5f;
+        float travelTop = trackY + styleInfo.thumbInset + halfText;
+        float travelBottom = trackY + styleInfo.trackHeight - styleInfo.thumbInset - halfText;
+        float travelRange = travelBottom - travelTop;
+        float valueCenterY = travelTop + (1.0f - (float)normValue) * travelRange;
+        
+        editorX = sliderBounds.getX() + (sliderBounds.getWidth() - editorWidth) * 0.5f;
+        editorY = valueCenterY - editorHeight * 0.5f;
+    }
+    
+    valueTextEditor->setBounds ((int)editorX, (int)editorY, (int)editorWidth, (int)editorHeight);
+    
+    // Set the current value as text (without suffix for easier editing)
+    juce::String valueText;
+    
+    if (valueDecimalPlaces == 0 || std::abs(value) >= 100.0)
+        valueText = juce::String ((int)value);
+    else
+        valueText = juce::String (value, valueDecimalPlaces);
+    
+    valueTextEditor->setText (valueText, false);
+    valueTextEditor->setVisible (true);
+    valueTextEditor->grabKeyboardFocus();
+    valueTextEditor->selectAll();
+    
+    // Add mouse listener to top-level component to catch clicks outside
+    if (auto* topLevel = getTopLevelComponent())
+        topLevel->addMouseListener (this, true);
+}
+
+void SliderModule::hideTextEditor (bool commitValue)
+{
+    if (!isEditingValue || valueTextEditor == nullptr)
+        return;
+    
+    if (commitValue)
+    {
+        // Parse the entered value and apply it to the slider
+        juce::String text = valueTextEditor->getText().trim();
+        double newValue = text.getDoubleValue();
+        
+        // Clamp to slider range
+        newValue = juce::jlimit (slider.getMinimum(), slider.getMaximum(), newValue);
+        
+        slider.setValue (newValue, juce::sendNotificationSync);
+    }
+    
+    // Remove mouse listener from top-level component
+    if (auto* topLevel = getTopLevelComponent())
+        topLevel->removeMouseListener (this);
+    
+    valueTextEditor->setVisible (false);
+    isEditingValue = false;
+    repaint();
+}
+
+void SliderModule::textEditorReturnKeyPressed()
+{
+    hideTextEditor (true);  // Commit the value
+}
+
+void SliderModule::textEditorEscapeKeyPressed()
+{
+    hideTextEditor (false);  // Cancel without committing
+}
+
+void SliderModule::textEditorFocusLost()
+{
+    // Commit value when focus is lost (clicking elsewhere)
+    hideTextEditor (true);
 }

@@ -27,11 +27,19 @@ AKSurroundDelay/
 │   ├── PluginEditor.cpp
 │   ├── CustomLookAndFeel.h     # Custom LookAndFeel for SVG-based UI
 │   ├── CustomLookAndFeel.cpp
-│   ├── SliderModule.h          # Reusable vertical slider component
+│   ├── SliderModule.h          # Reusable slider component with FaderStyle support
 │   └── SliderModule.cpp
-├── assets/                     # SVG assets for UI elements
-│   ├── SliderTrack.svg         # 38×170px slider track (white)
-│   └── SliderThumb.svg         # 34×13px slider thumb (white)
+├── assets/                     # Fader assets organized by size
+│   ├── Fader 38 x 170/         # Standard vertical fader (default)
+│   │   ├── Fader 38 x 170_frame.svg
+│   │   ├── Fader 38 x 170_thumb.svg
+│   │   ├── Fader 38 x 170_sprite_sheet.png
+│   │   └── Fader 38 x 170_color0-9.png  # Pre-generated color variants
+│   ├── Fader 32 x 129/         # Medium vertical fader
+│   ├── Fader 32 x 129 Front-Back/  # Medium fader with Front/Back labels
+│   ├── Fader 28 x 84 Horizontal Left-Right/  # Horizontal fader
+│   ├── Fader 22 x 170/         # Slim vertical fader
+│   └── Fader 22 x 79/          # Small vertical fader
 ├── build/                      # CMake build directory
 └── .vscode/
     └── settings.json           # CMake configuration
@@ -39,19 +47,25 @@ AKSurroundDelay/
 
 ## UI Component System
 
-### SliderModule - Reusable Vertical Slider
-A fully-featured, SVG-based vertical slider component with:
-- **SVG Rendering**: Track (38×170px) and thumb (34×13px) loaded from `assets/`
+### SliderModule - Reusable Slider Component
+A fully-featured slider component supporting multiple fader styles:
+- **Multiple Sizes**: 6 fader styles via `FaderStyle` enum
+- **SVG Rendering**: Track and thumb loaded from style-specific folder
+- **PNG Spritesheet**: Animated fill bar with pre-cached color variants
 - **Value Display**: Shows parameter value inside the moving thumb
-- **Parameter Label**: Displays parameter name below the slider
-- **Color Tinting**: Per-slider accent color that tints both track and thumb SVGs
+- **Parameter Label**: Displays parameter name below/beside slider
+- **Color Tinting**: Per-slider accent color with instant color lookup
 - **Dynamic Reassignment**: Can be reassigned to different parameters on-the-fly
-- **Configurable Styling**: All dimensions, fonts, and colors defined as static constants
+- **Horizontal Support**: `Fader_28x84_HorizontalLeftRight` for horizontal sliders
 
 #### Key Features
 ```cpp
-// Create a slider module
+// Create a slider module (default style: Fader_38x170)
 SliderModule gainSlider {"GAIN"};
+
+// Create with specific fader style
+SliderModule smallSlider {"VOL", FaderStyle::Fader_22x79};
+SliderModule panSlider {"PAN", FaderStyle::Fader_28x84_HorizontalLeftRight};
 
 // Set custom color (tints SVG track and thumb)
 gainSlider.setAccentColour (juce::Colours::blue);
