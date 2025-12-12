@@ -34,6 +34,25 @@ TapPanel::TapPanel (int tapIndex_, juce::AudioProcessorValueTreeState& apvts)
     timeFader.setValueTextColour (textColour);
     timeFader.setValueSuffix ("ms");
     timeFader.attachToParameter (apvts, "delayTime" + suffix);
+    
+    // Add sync icon to time fader (click to toggle sync mode)
+    timeFader.setShowSyncIcon (true);
+    timeFader.onSyncToggled = [this] (bool enabled)
+    {
+        // When sync is toggled, switch between note value and ms display
+        if (enabled)
+        {
+            timeFader.setValueSuffix ("");  // Note string includes "1/4" etc.
+        }
+        else
+        {
+            timeFader.setValueSuffix ("ms");
+        }
+        
+        // TODO: Connect to processor to actually snap to tempo
+        DBG ("Tap " << tapIndex + 1 << " sync toggled: " << (enabled ? "ON" : "OFF"));
+    };
+    
     addAndMakeVisible (timeFader);
     
     // Setup position control group

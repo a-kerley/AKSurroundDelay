@@ -1,6 +1,7 @@
 #include "CustomLookAndFeel.h"
 #include "SliderModule.h"
 #include "ColorPalette.h"
+#include "SyncNoteValue.h"  // For note value helpers
 
 CustomLookAndFeel::CustomLookAndFeel()
 {
@@ -274,6 +275,20 @@ void CustomLookAndFeel::drawLinearSlider (juce::Graphics& g,
                 // Percent mode: 0% at bottom (value=0), 100% at top (value=1)
                 int percentValue = (int)std::round (value * 100.0f);
                 valueText = juce::String (percentValue) + "%";
+            }
+            else if (displayMode == ValueDisplayMode::SyncNote)
+            {
+                // SyncNote mode: Display musical note value based on current tempo
+                // Get BPM and note value from SliderModule
+                if (auto* sm = dynamic_cast<SliderModule*>(slider.getParentComponent()))
+                {
+                    SyncNoteValue noteValue = sm->getSyncNoteValue();
+                    valueText = getNoteValueString (noteValue);
+                }
+                else
+                {
+                    valueText = "1/4";  // Fallback
+                }
             }
             else
             {

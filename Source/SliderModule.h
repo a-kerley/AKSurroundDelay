@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "ColorPalette.h"
+#include "SyncNoteValue.h"
 
 //==============================================================================
 // Forward declaration
@@ -62,7 +63,8 @@ enum class ValueDisplayMode
     Standard,      // Standard numeric display with optional suffix (e.g., "50%", "100ms")
     PanLeftRight,  // Left/Right pan: L100 to C to R100 (center = 0)
     FrontBack,     // Front/Back position: F100 (top) to C to B100 (bottom)
-    Percent        // Simple 0-100% display (no direction labels)
+    Percent,       // Simple 0-100% display (no direction labels)
+    SyncNote       // Musical note value display (1/4, 1/8T, etc.) based on current tempo
 };
 
 //==============================================================================
@@ -361,13 +363,19 @@ public:
     // CUSTOMIZATION
     //==========================================================================
     /** Set a custom accent color for this slider (future: could tint track/thumb) */
-    void setAccentColour (juce::Colour colour) { accentColour = colour; }
+    void setAccentColour (juce::Colour colour) 
+    { 
+        accentColour = colour; 
+    }
     
     /** Get the current accent color */
     juce::Colour getAccentColour() const { return accentColour; }
     
     /** Set a custom text color for the value display */
-    void setValueTextColour (juce::Colour colour) { valueTextColour = colour; }
+    void setValueTextColour (juce::Colour colour) 
+    { 
+        valueTextColour = colour; 
+    }
     
     /** Get the current value text color (returns inactive color when disabled) */
     juce::Colour getValueTextColour() const { return sliderEnabled ? valueTextColour : ColorPalette::inactiveLabelColour; }
@@ -489,6 +497,44 @@ public:
     void mouseDoubleClick (const juce::MouseEvent& event) override;
     void mouseDown (const juce::MouseEvent& event) override;
     
+    //==========================================================================
+    // SYNC ICON
+    // A simple clock icon next to the label indicating tempo sync is enabled
+    //==========================================================================
+    
+    /**
+     * Show a sync icon next to the label (enables clicking to toggle sync).
+     */
+    void setShowSyncIcon (bool show) { showSyncIcon = show; repaint(); }
+    bool getShowSyncIcon() const { return showSyncIcon; }
+    
+    /** 
+     * Set whether sync is enabled (affects icon appearance and value display mode).
+     */
+    void setSyncEnabled (bool enabled);
+    bool isSyncEnabled() const { return syncEnabled; }
+    
+    /**
+     * Callback invoked when sync icon is clicked.
+     * Use this to toggle sync state and update processor.
+     */
+    std::function<void(bool syncEnabled)> onSyncToggled;
+    
+    /**
+     * Set the current BPM (beats per minute) for tempo sync calculations.
+     */
+    void setHostBPM (float bpm) { hostBPM = bpm; }
+    float getHostBPM() const { return hostBPM; }
+    
+    /**
+     * Get the nearest note value based on current slider value (in ms) and BPM.
+     * Used for SyncNote display mode.
+     */
+    SyncNoteValue getSyncNoteValue() const
+    {
+        return msToNearestNoteValue (static_cast<float>(slider.getValue()), hostBPM);
+    }
+
 private:
     //==========================================================================
     // TEXT ENTRY FOR MANUAL VALUE INPUT
@@ -544,6 +590,16 @@ private:
     // Key = {FaderStyle, colorIndex}
     static std::map<std::pair<FaderStyle, int>, juce::Image> colorVariants;
     static std::map<FaderStyle, bool> colorVariantsLoaded;
+    
+    //==========================================================================\n    // SYNC ICON MEMBERS
+    //==========================================================================
+    bool showSyncIcon = false;   // Whether to show sync icon next to label
+    bool syncEnabled = false;    // Whether sync is currently enabled
+    float hostBPM = 120.0f;      // Current host tempo (for sync calculations)
+    juce::Rectangle<float> syncIconBounds;  // Bounds of the sync icon for click detection
+    
+    /** Draw the sync clock icon */
+    void drawSyncIcon (juce::Graphics& g, juce::Rectangle<float> bounds, bool filled) const;
     
     //==========================================================================
     // HELPER METHODS

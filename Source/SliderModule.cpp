@@ -681,6 +681,36 @@ void SliderModule::paint (juce::Graphics& g)
                                                   (float)labelBounds.getY() + yOffset,
                                                   textWidth, textHeight));
     }
+    
+    // Draw sync icon next to label if enabled
+    if (showSyncIcon)
+    {
+        auto bounds = getLocalBounds();
+        bounds.removeFromTop ((int)componentPaddingTop());
+        bounds.removeFromBottom ((int)componentPaddingBottom());
+        auto labelBounds = bounds.removeFromBottom ((int)labelHeight());
+        
+        // Icon size based on label height
+        float iconSize = labelHeight() * 0.8f;
+        float iconGap = 2.0f * currentScaleFactor;
+        
+        // Get the width of the label text to position icon to its right
+        auto labelFont = juce::Font (juce::FontOptions (labelFontSize()));
+        float labelTextWidth = labelFont.getStringWidthFloat (parameterName);
+        
+        // Center point of the label
+        float labelCenterX = labelBounds.getCentreX();
+        
+        // Icon positioned to the right of the centered text
+        float iconX = labelCenterX + (labelTextWidth * 0.5f) + iconGap;
+        float iconY = labelBounds.getCentreY() - (iconSize * 0.5f);
+        
+        // Store icon bounds for click detection
+        syncIconBounds = juce::Rectangle<float> (iconX, iconY, iconSize, iconSize);
+        
+        // Draw the icon (filled when sync enabled, outline when disabled)
+        drawSyncIcon (g, syncIconBounds, syncEnabled);
+    }
 }
 
 void SliderModule::resized()
@@ -758,6 +788,25 @@ void SliderModule::mouseDoubleClick (const juce::MouseEvent& event)
 
 void SliderModule::mouseDown (const juce::MouseEvent& event)
 {
+    // Check for click on sync icon first
+    if (showSyncIcon && syncIconBounds.contains (event.position))
+    {
+        syncEnabled = !syncEnabled;
+        
+        // Update display mode based on sync state
+        if (syncEnabled)
+            setValueDisplayMode (ValueDisplayMode::SyncNote);
+        else
+            setValueDisplayMode (ValueDisplayMode::Standard);
+        
+        // Notify via callback if set
+        if (onSyncToggled)
+            onSyncToggled (syncEnabled);
+        
+        repaint();
+        return;
+    }
+    
     // If text editor is open and click is outside it, close it
     // This handles clicks both within and outside this component's bounds
     // (we listen to the top-level component when text editor is open)
@@ -974,4 +1023,70 @@ void SliderModule::setSliderEnabled (bool enabled)
     }
     
     repaint();
+}
+
+//==============================================================================
+// SECONDARY CONTROL SUPPORT
+//==============================================================================
+
+//==============================================================================
+// SYNC ICON METHODS
+//==============================================================================
+
+void SliderModule::setSyncEnabled (bool enabled)
+{
+    if (syncEnabled != enabled)
+    {
+        syncEnabled = enabled;
+        
+        // Update display mode based on sync state
+        if (syncEnabled)
+            setValueDisplayMode (ValueDisplayMode::SyncNote);
+        else
+            setValueDisplayMode (ValueDisplayMode::Standard);
+        
+        repaint();
+    }
+}
+
+void SliderModule::drawSyncIcon (juce::Graphics& g, juce::Rectangle<float> bounds, bool filled) const
+{
+    // Draw a clock icon - same color as the label
+    g.setColour (sliderEnabled ? labelTextColour : ColorPalette::inactiveLabelColour);
+    
+    float cx = bounds.getCentreX();
+    float cy = bounds.getCentreY();
+    float size = juce::jmin (bounds.getWidth(), bounds.getHeight());
+    float radius = size * 0.45f;
+    float lineWidth = size * 0.1f;
+    
+    if (filled)
+    {
+        // Filled clock - draw filled circle
+        g.fillEllipse (cx - radius, cy - radius, radius * 2.0f, radius * 2.0f);
+        
+        // Draw clock hands in contrasting color
+        g.setColour (juce::Colour (0xff1a1a1a));  // Dark hands on light circle
+        
+        // Vertical line (12 o'clock to center)
+        float handLength = radius * 0.55f;
+        g.drawLine (cx, cy - handLength, cx, cy, lineWidth * 1.2f);
+        
+        // Horizontal line (center to 3 o'clock)
+        float hourHandLength = radius * 0.4f;
+        g.drawLine (cx, cy, cx + hourHandLength, cy, lineWidth * 1.2f);
+    }
+    else
+    {
+        // Outline clock - stroke circle and hands
+        g.drawEllipse (cx - radius, cy - radius, radius * 2.0f, radius * 2.0f, lineWidth);
+        
+        // Vertical line (12 o'clock to center)
+        float handLength = radius * 0.55f;
+        g.drawLine (cx, cy - handLength, cx, cy, lineWidth);
+        
+        // Horizontal line (center to 3 o'clock)
+        float hourHandLength = radius * 0.4f;
+        g.drawLine (cx, cy, cx + hourHandLength, cy, lineWidth);
+    }
 }
